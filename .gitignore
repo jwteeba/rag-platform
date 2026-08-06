@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Testing / coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+coverage.xml
+.coverage
+.coverage.*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Poetry
+poetry.lock.orig
+
+# Docker
+docker-compose.override.local.yml

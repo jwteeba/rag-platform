@@ -1,0 +1,7 @@
+# Automatically merged by `docker compose up` in local development.
+# Keep this file out of anything used for CI or production deployment —
+# it exists purely for developer-machine convenience overrides.
+services:
+  api:
+    environment:
+      APP_LOG_LEVEL: DEBUG
