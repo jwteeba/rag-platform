@@ -15,6 +15,8 @@ from pydantic import BaseModel, Field
 
 from rag_platform.core.exceptions import (
     ApplicationError,
+    AuthenticationError,
+    AuthorizationError,
     ConflictError,
     NotFoundError,
     ValidationError,
@@ -26,6 +28,8 @@ _ERROR_STATUS_MAP: dict[type[ApplicationError], HTTPStatus] = {
     NotFoundError: HTTPStatus.NOT_FOUND,
     ValidationError: HTTPStatus.UNPROCESSABLE_ENTITY,
     ConflictError: HTTPStatus.CONFLICT,
+    AuthenticationError: HTTPStatus.UNAUTHORIZED,
+    AuthorizationError: HTTPStatus.FORBIDDEN,
 }
 
 

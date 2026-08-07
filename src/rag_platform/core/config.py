@@ -18,7 +18,7 @@ from enum import StrEnum
 from functools import lru_cache
 from typing import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -81,6 +81,35 @@ class Settings(BaseSettings):
 
     cors_allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     allowed_hosts: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
+
+    # -- Authentication (Phase 2) -----------------------------------------
+    # HMAC secret used to sign/verify JWTs. The default is safe only for
+    # local development because `is_production` is checked at startup (see
+    # `main.py`) and refuses to boot with the default in production.
+    jwt_secret_key: str = "insecure-development-secret-change-me"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = Field(default=15, ge=1)
+    refresh_token_expire_days: int = Field(default=7, ge=1)
+
+    # Optional convenience for local/dev environments: if both are set, the
+    # application ensures a single ADMIN-role user exists with these
+    # credentials on startup. Unset (the default) in any environment where
+    # this isn't wanted, including production unless deliberately supplied
+    # through a real secret store.
+    bootstrap_admin_email: str | None = None
+    bootstrap_admin_password: str | None = None
+
+    @model_validator(mode="after")
+    def _reject_default_jwt_secret_in_production(self) -> Settings:
+        """Fail fast at startup rather than silently signing production JWTs
+        with a publicly-known development secret."""
+        if self.is_production and self.jwt_secret_key == "insecure-development-secret-change-me":
+            raise ValueError(
+                "APP_JWT_SECRET_KEY must be set to a real secret when "
+                "APP_ENVIRONMENT=production. Refusing to start with the "
+                "default development secret."
+            )
+        return self
 
     @field_validator("cors_allowed_origins", "allowed_hosts", mode="before")
     @classmethod

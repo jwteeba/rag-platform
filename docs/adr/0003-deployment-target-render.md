@@ -1,13 +1,17 @@
 # 0003. Deployment target: Render
 
-- **Status:** Accepted
+- **Status:** Superseded by [0004](0004-deployment-target-platform-agnostic.md)
 - **Date:** 2026-08-05
+
+> **Note (superseded):** This decision was reversed before Phase 2 began —
+> see ADR-0004. Kept here, unedited, as the historical record of what was
+> decided and why at the time; ADRs are not rewritten in place.
 
 ## Context
 
 Phase 0 asked whether a specific deployment target should influence
 health-check/readiness conventions early, rather than staying fully
-platform-agnostic. I chose Render.
+platform-agnostic. The user chose Render.
 
 ## Decision
 

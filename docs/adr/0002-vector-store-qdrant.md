@@ -8,7 +8,8 @@
 Phase 0 flagged ChromaDB's clustering/HA maturity as a risk for an
 enterprise-scale deployment, and proposed isolating the vector store behind
 a `VectorIndexPort` interface (`indexing/domain/ports.py`) specifically so
-this decision could be revisited cheaply.
+this decision could be revisited cheaply. The user confirmed the swap before
+Phase 1 began.
 
 ## Decision
 

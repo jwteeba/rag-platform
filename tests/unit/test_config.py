@@ -32,6 +32,10 @@ class TestSettingsEnvParsing:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("APP_ENVIRONMENT", "production")
+        # A real secret is required in production (see
+        # TestProductionSafety below) — set one so this test stays focused
+        # on env-var parsing rather than that separate validation rule.
+        monkeypatch.setenv("APP_JWT_SECRET_KEY", "a-real-production-secret")
 
         settings = Settings(_env_file=None)
 
@@ -61,6 +65,30 @@ class TestSettingsEnvParsing:
 
         with pytest.raises(ValueError, match="less than or equal to 65535"):
             Settings(_env_file=None)
+
+
+class TestProductionSafety:
+    def test_rejects_default_jwt_secret_in_production(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("APP_ENVIRONMENT", "production")
+
+        with pytest.raises(ValueError, match="APP_JWT_SECRET_KEY must be set"):
+            Settings(_env_file=None)
+
+    def test_accepts_a_real_secret_in_production(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("APP_ENVIRONMENT", "production")
+        monkeypatch.setenv("APP_JWT_SECRET_KEY", "a-real-production-secret")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.jwt_secret_key == "a-real-production-secret"
+
+    def test_default_secret_is_fine_outside_production(self) -> None:
+        # Development is the default environment; should not raise.
+        settings = Settings(_env_file=None)
+
+        assert settings.jwt_secret_key == "insecure-development-secret-change-me"
 
 
 class TestGetSettings:

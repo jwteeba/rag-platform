@@ -57,3 +57,27 @@ class ConflictError(ApplicationError):
 
     message = "The request conflicts with the current state of the resource."
     error_type = "conflict"
+
+
+class AuthenticationError(ApplicationError):
+    """Raised when a request's credentials are missing or invalid.
+
+    Generic and reusable by any bounded context that needs to challenge a
+    caller's identity — not identity_access-specific. Domain-specific
+    subclasses (e.g. `InvalidCredentialsError`) live in the context that
+    raises them.
+    """
+
+    message = "Authentication is required or the provided credentials are invalid."
+    error_type = "authentication-error"
+
+
+class AuthorizationError(ApplicationError):
+    """Raised when an authenticated caller lacks permission for the action.
+
+    Distinct from `AuthenticationError`: this means "I know who you are, and
+    you're not allowed to do that" rather than "I don't know who you are."
+    """
+
+    message = "You do not have permission to perform this action."
+    error_type = "authorization-error"
