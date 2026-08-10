@@ -1,15 +1,4 @@
-"""Low-level password-hashing and JWT utility functions.
-
-These are pure functions with no knowledge of the domain (no `User`, no
-ports) — they take primitives in and return primitives out. Framework-free
-beyond the crypto libraries themselves.
-
-`identity_access/infrastructure/security/` wraps these functions in classes
-that implement the domain's `PasswordHasherPort` and `TokenServicePort`
-interfaces. Keeping the raw crypto here and the port-adapter wiring there
-mirrors the Phase 0 decision to keep `core/` as shared, framework-light
-utilities that any bounded context's infrastructure layer can build on.
-"""
+"""Low-level password-hashing and JWT utility functions."""
 
 from __future__ import annotations
 

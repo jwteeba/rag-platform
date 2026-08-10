@@ -49,6 +49,8 @@ def _build_lifespan(
         await ensure_bootstrap_admin(app.state.container, settings)
         logger.info("application_startup_complete")
         yield
+        await app.state.container.engine.dispose()
+        logger.info("application_shutdown_complete")
 
     return lifespan
 

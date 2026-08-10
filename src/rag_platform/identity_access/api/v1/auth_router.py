@@ -1,8 +1,7 @@
 """Authentication endpoints.
 
-Thin per the architecture rules: each route parses its request, calls one
-application service method, and maps the result to a response schema. No
-business logic lives here.
+Each route parses its request, calls one application service method,
+and maps the result to a response schema. No business logic lives here.
 """
 
 from __future__ import annotations

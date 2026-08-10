@@ -1,15 +1,9 @@
 """Application configuration.
 
-All runtime configuration is loaded from environment variables (optionally via
-a local `.env` file in development) through `pydantic-settings`. No module in
-this codebase other than this one may read from `os.environ` directly — every
-other layer receives configuration through the `Settings` object below, wired
-via dependency injection.
-
-Future phases will add sibling settings groups (e.g. `DatabaseSettings`,
-`RedisSettings`, `LLMSettings`) and compose them into `Settings` the same way
-`log_level` and friends are composed here. Nothing is stubbed out ahead of
-the phase that needs it.
+All runtime configuration is loaded from environment variables through
+`pydantic-settings`. No module in this codebase other than this one may
+read from `os.environ` directly — every other layer receives configuration
+through the `Settings` object below, wired via dependency injection.
 """
 
 from __future__ import annotations
@@ -98,6 +92,16 @@ class Settings(BaseSettings):
     # through a real secret store.
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: str | None = None
+
+    # -- Database (Phase 3) ------------------------------------------------
+    # `+asyncpg` because every DB call in this codebase is async (repository
+    # ports are `async def` throughout); a sync driver would silently block
+    # the event loop.
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/rag_platform"
+    database_pool_size: int = Field(default=5, ge=1)
+    database_max_overflow: int = Field(default=10, ge=0)
+    database_echo: bool = False
+    database_ssl_mode: str | None = None
 
     @model_validator(mode="after")
     def _reject_default_jwt_secret_in_production(self) -> Settings:
