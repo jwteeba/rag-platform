@@ -1,4 +1,19 @@
-"""RBAC model: roles and the permissions each role grants."""
+"""RBAC model: roles and the permissions each role grants.
+
+Scoping decision for Phase 2 (flagged explicitly, same as the ChromaDB and
+vector-store flags in earlier phases): this is a **fixed, two-role** model
+(`ADMIN`, `MEMBER`), not a fully dynamic role/permission system with
+database-backed custom roles. A dynamic system needs persistent storage to
+be meaningful (custom roles an admin defines at runtime), and Phase 2 has no
+database yet (that's Phase 3). Building dynamic role CRUD against an
+in-memory store would be throwaway work, not production-ready infrastructure.
+
+The fixed model is still genuine RBAC — permissions are checked, not roles,
+throughout the application and API layers (see `Permission` below and
+`identity_access/api/v1/dependencies.py`) — so when Phase 3 or a later phase
+wants to make roles dynamic, only `ROLE_PERMISSIONS` and the `Role` type
+change; every permission check elsewhere in the codebase is unaffected.
+"""
 
 from __future__ import annotations
 

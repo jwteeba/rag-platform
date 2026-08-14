@@ -1,4 +1,12 @@
-"""Liveness and readiness endpoints."""
+"""Liveness and readiness endpoints.
+
+Kept deliberately outside `/api/v1` — health checks are an infrastructure
+concern consumed by whatever container orchestrator or PaaS ends up running
+this service (Kubernetes, ECS, Render, Nomad, etc. — the deployment target
+is intentionally left platform-agnostic, see ADR-0004), not a versioned
+business API, so they aren't subject to API versioning or client-facing
+deprecation policy.
+"""
 
 from __future__ import annotations
 
@@ -42,7 +50,10 @@ async def readiness(request: Request, response: Response) -> ReadinessResponse:
     settings: Settings = get_settings()
     container: Container = request.app.state.container
 
-    checks: dict[str, str] = {"database": await _check_database(container)}
+    checks: dict[str, str] = {
+        "database": await _check_database(container),
+        "redis": await _check_redis(container),
+    }
 
     all_ok = all(result == "ok" for result in checks.values())
     if not all_ok:
@@ -66,6 +77,16 @@ async def _check_database(container: Container) -> str:
     try:
         async with container.engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
+    except Exception as exc:  # deliberately broad — see docstring
+        return f"unreachable: {exc}"
+    return "ok"
+
+
+async def _check_redis(container: Container) -> str:
+    """Ping Redis to confirm it's reachable. Same never-raises contract as
+    `_check_database` above."""
+    try:
+        await container.redis_client.ping()
     except Exception as exc:  # deliberately broad — see docstring
         return f"unreachable: {exc}"
     return "ok"

@@ -10,20 +10,21 @@ from fastapi.testclient import TestClient
 
 from rag_platform.core.config import Environment, LogFormat, Settings
 from rag_platform.main import create_app
-from tests.conftest import TEST_DATABASE_URL
+from tests.conftest import TEST_DATABASE_URL, TEST_REDIS_URL
 
 ADMIN_EMAIL = "admin@example.com"
 ADMIN_PASSWORD = "AdminPass123"
 
 
 @pytest.fixture
-def admin_settings(clean_database: None) -> Settings:
+def admin_settings(clean_database: None, clean_cache: None) -> Settings:
     """Settings with a bootstrap admin configured, for RBAC-admin test cases."""
     return Settings(
         environment=Environment.TESTING,
         log_format=LogFormat.JSON,
         allowed_hosts=["*"],
         database_url=TEST_DATABASE_URL,
+        redis_url=TEST_REDIS_URL,
         bootstrap_admin_email=ADMIN_EMAIL,
         bootstrap_admin_password=ADMIN_PASSWORD,
     )

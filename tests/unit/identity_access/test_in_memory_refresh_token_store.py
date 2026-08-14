@@ -94,3 +94,47 @@ class TestRevokeAllForUser:
         fetched = await store.get(other_user_token.jti)
         assert fetched is not None
         assert fetched.revoked is False
+
+
+class TestListActiveForUser:
+    async def test_empty_store_returns_empty_list(self, store: InMemoryRefreshTokenStore) -> None:
+        assert await store.list_active_for_user(uuid.uuid4()) == []
+
+    async def test_returns_only_that_users_tokens(self, store: InMemoryRefreshTokenStore) -> None:
+        user_id = uuid.uuid4()
+        mine = _make_token(user_id=user_id)
+        someone_elses = _make_token()
+        await store.store(mine)
+        await store.store(someone_elses)
+
+        active = await store.list_active_for_user(user_id)
+
+        assert [t.jti for t in active] == [mine.jti]
+
+    async def test_excludes_revoked_tokens(self, store: InMemoryRefreshTokenStore) -> None:
+        user_id = uuid.uuid4()
+        token = _make_token(user_id=user_id)
+        await store.store(token)
+        await store.revoke(token.jti)
+
+        assert await store.list_active_for_user(user_id) == []
+
+    async def test_excludes_expired_tokens(self, store: InMemoryRefreshTokenStore) -> None:
+        user_id = uuid.uuid4()
+        expired = _make_token(user_id=user_id, expires_at=datetime.now(UTC) - timedelta(seconds=1))
+        await store.store(expired)
+
+        assert await store.list_active_for_user(user_id) == []
+
+    async def test_includes_multiple_active_sessions(
+        self, store: InMemoryRefreshTokenStore
+    ) -> None:
+        user_id = uuid.uuid4()
+        token_a = _make_token(user_id=user_id)
+        token_b = _make_token(user_id=user_id)
+        await store.store(token_a)
+        await store.store(token_b)
+
+        active = await store.list_active_for_user(user_id)
+
+        assert {t.jti for t in active} == {token_a.jti, token_b.jti}

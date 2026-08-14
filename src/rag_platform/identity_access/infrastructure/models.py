@@ -1,10 +1,23 @@
-"""SQLAlchemy ORM models for the identity_access context."""
+"""SQLAlchemy ORM models for the identity_access context.
+
+These are Infrastructure-layer artifacts — the domain (`domain/entities.py`)
+knows nothing about them. `postgres_user_repository.py` and
+`postgres_refresh_token_store.py` translate between `UserModel`/
+`RefreshTokenModel` here and the framework-free `User`/`IssuedRefreshToken`
+the rest of the application works with.
+
+No `workspace_id` column on `users`: per `docs/architecture.md`, workspace
+scoping applies to workspace-*owned* resources (documents, conversations,
+etc., introduced in later phases), not to user accounts themselves — a
+user's relationship to a workspace is membership, not ownership, and no
+membership concept exists yet. Revisit this if/when workspace membership is
+introduced.
+"""
 
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -14,7 +27,6 @@ from rag_platform.core.db import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 class UserModel(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "users"
-    __table_args__: Any = {"schema": "rag_platform"}  # noqa: RUF012
 
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -28,7 +40,6 @@ class UserModel(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 class RefreshTokenModel(Base):
     __tablename__ = "refresh_tokens"
-    __table_args__: Any = {"schema": "rag_platform"}  # noqa: RUF012
 
     # The JWT's own `jti` claim is the primary key — no separate surrogate
     # id. A refresh token row's entire purpose is "is this jti valid",

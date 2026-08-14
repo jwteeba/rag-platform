@@ -1,13 +1,16 @@
 """In-memory implementation of `RefreshTokenStorePort`.
 
 Same rationale as `InMemoryUserRepository`: a complete, tested Phase 2
-adapter, swapped for a Redis- or Postgres-backed implementation once Phase 4
-(Redis) or Phase 3 (Postgres) lands, behind the same port. See ADR-0005.
+adapter. Not what the running application uses as of Phase 3 (Postgres,
+see `postgres_refresh_token_store.py`) or Phase 4 (a Redis cache-aside
+layer in front of Postgres, see `cached_refresh_token_store.py`) — still
+shipped and unit-tested behind the same port, per ADR-0005.
 """
 
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from rag_platform.identity_access.domain.ports import IssuedRefreshToken, RefreshTokenStorePort
@@ -50,3 +53,12 @@ class InMemoryRefreshTokenStore(RefreshTokenStorePort):
                         expires_at=token.expires_at,
                         revoked=True,
                     )
+
+    async def list_active_for_user(self, user_id: uuid.UUID) -> list[IssuedRefreshToken]:
+        now = datetime.now(UTC)
+        async with self._lock:
+            return [
+                token
+                for token in self._tokens.values()
+                if token.user_id == user_id and not token.revoked and token.expires_at > now
+            ]

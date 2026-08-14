@@ -48,3 +48,17 @@ class TokenRevokedError(AuthenticationError):
 class InsufficientPermissionsError(AuthorizationError):
     message = "You do not have the required permission to perform this action."
     error_type = "insufficient-permissions"
+
+
+class SessionNotFoundError(NotFoundError):
+    """Raised when a session (refresh token) doesn't exist, is already
+    revoked/expired, or — deliberately indistinguishable from those cases —
+    belongs to a different user than the caller.
+
+    Returning the same "not found" response for "doesn't exist" and
+    "belongs to someone else" avoids leaking which jti values are valid for
+    other accounts.
+    """
+
+    message = "Session not found."
+    error_type = "session-not-found"

@@ -30,6 +30,9 @@ from rag_platform.identity_access.domain.entities import User
 from rag_platform.identity_access.domain.exceptions import InsufficientPermissionsError
 from rag_platform.identity_access.domain.ports import RefreshTokenStorePort, UserRepositoryPort
 from rag_platform.identity_access.domain.roles import Permission, role_has_permission
+from rag_platform.identity_access.infrastructure.repositories.cached_refresh_token_store import (
+    CachedRefreshTokenStore,
+)
 from rag_platform.identity_access.infrastructure.repositories.postgres_refresh_token_store import (
     PostgresRefreshTokenStore,
 )
@@ -65,8 +68,20 @@ def get_user_repository(
 
 def get_refresh_token_store(
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    container: Annotated[Container, Depends(get_container)],
 ) -> RefreshTokenStorePort:
-    return PostgresRefreshTokenStore(session)
+    """Build a `RefreshTokenStorePort` for this request.
+
+    As of Phase 4, this is `PostgresRefreshTokenStore` wrapped in a Redis
+    cache-aside layer (`CachedRefreshTokenStore`) — see ADR-0007. Postgres
+    remains the source of truth; the wrapper only avoids a DB round-trip on
+    repeat lookups of the same jti within the cache TTL.
+    """
+    return CachedRefreshTokenStore(
+        wrapped=PostgresRefreshTokenStore(session),
+        cache=container.cache_service,
+        ttl_seconds=container.refresh_token_cache_ttl_seconds,
+    )
 
 
 def get_auth_service(

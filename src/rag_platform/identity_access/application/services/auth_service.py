@@ -16,6 +16,7 @@ from rag_platform.identity_access.domain.exceptions import (
     InactiveUserError,
     InvalidCredentialsError,
     InvalidTokenError,
+    SessionNotFoundError,
     TokenRevokedError,
     UserAlreadyExistsError,
 )
@@ -150,6 +151,28 @@ class AuthenticationService:
         if not user.is_active:
             raise InactiveUserError()
         return user
+
+    async def list_sessions(self, user_id: uuid.UUID) -> list[IssuedRefreshToken]:
+        """List a user's active sessions (unrevoked, unexpired refresh tokens)."""
+        return await self._refresh_tokens.list_active_for_user(user_id)
+
+    async def revoke_session(self, user_id: uuid.UUID, jti: str) -> None:
+        """Revoke one specific session, e.g. "log out this device".
+
+        Raises:
+            SessionNotFoundError: if `jti` doesn't exist, is already
+                revoked/expired, or belongs to a different user (the three
+                cases are deliberately indistinguishable to the caller —
+                see the exception's docstring).
+        """
+        session = await self._refresh_tokens.get(jti)
+        if session is None or session.user_id != user_id or session.revoked:
+            raise SessionNotFoundError()
+        await self._refresh_tokens.revoke(jti)
+
+    async def revoke_all_sessions(self, user_id: uuid.UUID) -> None:
+        """Revoke every session for a user — "log out everywhere"."""
+        await self._refresh_tokens.revoke_all_for_user(user_id)
 
 
 def _parse_user_id(subject: str) -> uuid.UUID:

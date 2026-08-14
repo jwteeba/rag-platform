@@ -126,3 +126,62 @@ class TestRevokeAllForUser:
         await session.commit()
 
         assert await store.get(token.jti) is None
+
+
+class TestListActiveForUser:
+    async def test_empty_returns_empty_list(
+        self, store: PostgresRefreshTokenStore, existing_user_id: uuid.UUID
+    ) -> None:
+        assert await store.list_active_for_user(existing_user_id) == []
+
+    async def test_returns_only_that_users_tokens(
+        self, store: PostgresRefreshTokenStore, session: AsyncSession, existing_user_id: uuid.UUID
+    ) -> None:
+        other_user = User.create(
+            email="bob@example.com", hashed_password="hashed", full_name="Bob", role=Role.MEMBER
+        )
+        await PostgresUserRepository(session).add(other_user)
+        await session.commit()
+
+        mine = _make_token(existing_user_id)
+        someone_elses = _make_token(other_user.id)
+        await store.store(mine)
+        await store.store(someone_elses)
+        await session.commit()
+
+        active = await store.list_active_for_user(existing_user_id)
+
+        assert [t.jti for t in active] == [mine.jti]
+
+    async def test_excludes_revoked_tokens(
+        self, store: PostgresRefreshTokenStore, session: AsyncSession, existing_user_id: uuid.UUID
+    ) -> None:
+        token = _make_token(existing_user_id)
+        await store.store(token)
+        await session.commit()
+        await store.revoke(token.jti)
+        await session.commit()
+
+        assert await store.list_active_for_user(existing_user_id) == []
+
+    async def test_excludes_expired_tokens(
+        self, store: PostgresRefreshTokenStore, session: AsyncSession, existing_user_id: uuid.UUID
+    ) -> None:
+        expired = _make_token(existing_user_id, expires_at=datetime.now(UTC) - timedelta(seconds=1))
+        await store.store(expired)
+        await session.commit()
+
+        assert await store.list_active_for_user(existing_user_id) == []
+
+    async def test_includes_multiple_active_sessions(
+        self, store: PostgresRefreshTokenStore, session: AsyncSession, existing_user_id: uuid.UUID
+    ) -> None:
+        token_a = _make_token(existing_user_id)
+        token_b = _make_token(existing_user_id)
+        await store.store(token_a)
+        await store.store(token_b)
+        await session.commit()
+
+        active = await store.list_active_for_user(existing_user_id)
+
+        assert {t.jti for t in active} == {token_a.jti, token_b.jti}

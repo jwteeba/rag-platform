@@ -6,11 +6,26 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: rag_platform
     ports:
-      - "5432:5432"
+      # Use port 5433 for host to avoids silent host-port collision.
+      - "5433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      # Use port 6380 for host to avoids silent host-port collision.
+      - "6380:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -31,11 +46,14 @@ services:
       APP_ENVIRONMENT: development
       APP_LOG_FORMAT: console
       APP_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/rag_platform
+      APP_REDIS_URL: redis://redis:6379/0
     volumes:
       - ./src:/app/src
       - ./alembic:/app/alembic
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
@@ -46,3 +64,4 @@ services:
 
 volumes:
   postgres-data:
+  redis-data:

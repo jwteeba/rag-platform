@@ -1,9 +1,15 @@
 """Application configuration.
 
-All runtime configuration is loaded from environment variables through
-`pydantic-settings`. No module in this codebase other than this one may
-read from `os.environ` directly — every other layer receives configuration
-through the `Settings` object below, wired via dependency injection.
+All runtime configuration is loaded from environment variables (optionally via
+a local `.env` file in development) through `pydantic-settings`. No module in
+this codebase other than this one may read from `os.environ` directly — every
+other layer receives configuration through the `Settings` object below, wired
+via dependency injection.
+
+Settings groups are added flat (prefixed, e.g. `jwt_*`, `database_*`) rather
+than as nested sub-settings objects — simpler env-var mapping with
+`pydantic-settings`, and consistent with how `log_level` and friends already
+work. Nothing is stubbed out ahead of the phase that needs it.
 """
 
 from __future__ import annotations
@@ -100,8 +106,20 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/rag_platform"
     database_pool_size: int = Field(default=5, ge=1)
     database_max_overflow: int = Field(default=10, ge=0)
+    # Logs every SQL statement — verbose, dev/debugging only.
     database_echo: bool = False
-    database_ssl_mode: str | None = None
+
+    # -- Cache / Redis (Phase 4) --------------------------------------------
+    redis_url: str = "redis://localhost:6379/0"
+    redis_max_connections: int = Field(default=20, ge=1)
+    # Default TTL for cached refresh-token revocation lookups (see
+    # `identity_access/infrastructure/repositories/cached_refresh_token_store.py`).
+    # Deliberately short — a stale "not revoked" cache entry is a genuine
+    # (if small) security exposure window: a token revoked via logout could
+    # still read as valid from cache for up to this long. Individual cache
+    # entries also get evicted early, at the token's own expiry, whichever
+    # comes first.
+    refresh_token_cache_ttl_seconds: int = Field(default=60, ge=1)
 
     @model_validator(mode="after")
     def _reject_default_jwt_secret_in_production(self) -> Settings:

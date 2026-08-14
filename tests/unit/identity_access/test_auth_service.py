@@ -18,6 +18,7 @@ from rag_platform.identity_access.domain.exceptions import (
     InactiveUserError,
     InvalidCredentialsError,
     InvalidTokenError,
+    SessionNotFoundError,
     TokenRevokedError,
     UserAlreadyExistsError,
 )
@@ -332,3 +333,117 @@ class TestInactiveUser:
 
         with pytest.raises(InactiveUserError):
             await auth_service.get_current_user(pair.access_token)
+
+
+class TestSessionManagement:
+    async def test_list_sessions_empty_for_new_user(
+        self, auth_service: AuthenticationService
+    ) -> None:
+        user = await auth_service.register(_register_input())
+
+        assert await auth_service.list_sessions(user.id) == []
+
+    async def test_list_sessions_reflects_logins(self, auth_service: AuthenticationService) -> None:
+        user = await auth_service.register(_register_input())
+        await auth_service.issue_tokens(user)
+        await auth_service.issue_tokens(user)  # a second "device"
+
+        sessions = await auth_service.list_sessions(user.id)
+
+        assert len(sessions) == 2
+
+    async def test_list_sessions_excludes_revoked(
+        self, auth_service: AuthenticationService
+    ) -> None:
+        user = await auth_service.register(_register_input())
+        pair = await auth_service.issue_tokens(user)
+
+        await auth_service.revoke_session(user.id, _jti_of(pair.refresh_token))
+
+        assert await auth_service.list_sessions(user.id) == []
+
+    async def test_revoke_session_makes_that_refresh_token_unusable(
+        self, auth_service: AuthenticationService
+    ) -> None:
+        user = await auth_service.register(_register_input())
+        pair = await auth_service.issue_tokens(user)
+
+        await auth_service.revoke_session(user.id, _jti_of(pair.refresh_token))
+
+        with pytest.raises(TokenRevokedError):
+            await auth_service.refresh(pair.refresh_token)
+
+    async def test_revoke_session_does_not_affect_other_sessions(
+        self, auth_service: AuthenticationService
+    ) -> None:
+        user = await auth_service.register(_register_input())
+        pair_a = await auth_service.issue_tokens(user)
+        pair_b = await auth_service.issue_tokens(user)
+
+        await auth_service.revoke_session(user.id, _jti_of(pair_a.refresh_token))
+
+        # pair_b should still work.
+        await auth_service.refresh(pair_b.refresh_token)
+
+    async def test_revoke_session_of_unknown_jti_raises_session_not_found(
+        self, auth_service: AuthenticationService
+    ) -> None:
+        user = await auth_service.register(_register_input())
+
+        with pytest.raises(SessionNotFoundError):
+            await auth_service.revoke_session(user.id, "not-a-real-jti")
+
+    async def test_revoke_session_belonging_to_another_user_raises_session_not_found(
+        self, auth_service: AuthenticationService
+    ) -> None:
+        """Ownership check: can't revoke someone else's session by jti."""
+        owner = await auth_service.register(_register_input(email="owner@example.com"))
+        attacker = await auth_service.register(_register_input(email="attacker@example.com"))
+        pair = await auth_service.issue_tokens(owner)
+
+        with pytest.raises(SessionNotFoundError):
+            await auth_service.revoke_session(attacker.id, _jti_of(pair.refresh_token))
+
+    async def test_revoke_session_already_revoked_raises_session_not_found(
+        self, auth_service: AuthenticationService
+    ) -> None:
+        user = await auth_service.register(_register_input())
+        pair = await auth_service.issue_tokens(user)
+        jti = _jti_of(pair.refresh_token)
+        await auth_service.revoke_session(user.id, jti)
+
+        with pytest.raises(SessionNotFoundError):
+            await auth_service.revoke_session(user.id, jti)
+
+    async def test_revoke_all_sessions_clears_every_session(
+        self, auth_service: AuthenticationService
+    ) -> None:
+        user = await auth_service.register(_register_input())
+        pair_a = await auth_service.issue_tokens(user)
+        pair_b = await auth_service.issue_tokens(user)
+
+        await auth_service.revoke_all_sessions(user.id)
+
+        assert await auth_service.list_sessions(user.id) == []
+        with pytest.raises(TokenRevokedError):
+            await auth_service.refresh(pair_a.refresh_token)
+        with pytest.raises(TokenRevokedError):
+            await auth_service.refresh(pair_b.refresh_token)
+
+    async def test_revoke_all_sessions_with_none_active_does_not_raise(
+        self, auth_service: AuthenticationService
+    ) -> None:
+        user = await auth_service.register(_register_input())
+
+        # Should not raise even with nothing to revoke.
+        await auth_service.revoke_all_sessions(user.id)
+
+
+def _jti_of(refresh_token: str) -> str:
+    """Extract the `jti` claim from a refresh token for test setup —
+    application code never needs to do this itself (the service methods
+    take a session id / jti directly), but tests need it to simulate a
+    client presenting one specific session for revocation."""
+    import jwt as pyjwt
+
+    return str(pyjwt.decode(refresh_token, options={"verify_signature": False})["jti"])

@@ -88,7 +88,7 @@ class TestProductionSafety:
         # Development is the default environment; should not raise.
         settings = Settings(_env_file=None)
 
-        assert settings.jwt_secret_key == "insecure-development-secret-for-testing"
+        assert settings.jwt_secret_key == "insecure-development-secret-change-me"
 
 
 class TestGetSettings:

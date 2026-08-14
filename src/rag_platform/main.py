@@ -50,6 +50,7 @@ def _build_lifespan(
         logger.info("application_startup_complete")
         yield
         await app.state.container.engine.dispose()
+        await app.state.container.redis_client.aclose()
         logger.info("application_shutdown_complete")
 
     return lifespan

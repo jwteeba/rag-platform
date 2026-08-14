@@ -14,26 +14,31 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 
 from rag_platform.core.exceptions import ValidationError
 from rag_platform.identity_access.api.v1.dependencies import (
     CurrentUser,
+    get_auth_service,
     get_user_service,
     require_permission,
 )
 from rag_platform.identity_access.api.v1.schemas import (
+    SessionListResponse,
+    SessionResponse,
     UserAdminUpdateRequest,
     UserListResponse,
     UserProfileUpdateRequest,
     UserResponse,
 )
+from rag_platform.identity_access.application.services.auth_service import AuthenticationService
 from rag_platform.identity_access.application.services.user_service import UserService
 from rag_platform.identity_access.domain.roles import Permission
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
+AuthServiceDep = Annotated[AuthenticationService, Depends(get_auth_service)]
 
 
 @router.get("/me", response_model=UserResponse, summary="Get the current user's profile")
@@ -49,6 +54,47 @@ async def update_my_profile(
 ) -> UserResponse:
     updated = await user_service.update_profile(current_user.id, full_name=request.full_name)
     return UserResponse.model_validate(updated)
+
+
+@router.get(
+    "/me/sessions",
+    response_model=SessionListResponse,
+    summary="List the current user's active sessions",
+    description=(
+        "Each session corresponds to a still-valid refresh token — logging in from a new "
+        "device or browser creates a new one. Does not include revoked or expired sessions."
+    ),
+)
+async def list_my_sessions(
+    current_user: CurrentUser, auth_service: AuthServiceDep
+) -> SessionListResponse:
+    sessions = await auth_service.list_sessions(current_user.id)
+    return SessionListResponse(
+        items=[SessionResponse(session_id=s.jti, expires_at=s.expires_at) for s in sessions]
+    )
+
+
+@router.delete(
+    "/me/sessions/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Revoke a specific session",
+    description='E.g. "log out this device" while staying logged in elsewhere.',
+)
+async def revoke_my_session(
+    session_id: str, current_user: CurrentUser, auth_service: AuthServiceDep
+) -> None:
+    await auth_service.revoke_session(current_user.id, session_id)
+
+
+@router.post(
+    "/me/sessions/revoke-all",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Revoke every session — log out everywhere",
+)
+async def revoke_all_my_sessions(current_user: CurrentUser, auth_service: AuthServiceDep) -> None:
+    await auth_service.revoke_all_sessions(current_user.id)
 
 
 @router.get(

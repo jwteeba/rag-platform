@@ -22,6 +22,7 @@ sqlalchemy = "^2.0.35"
 alembic = "^1.13.3"
 asyncpg = "^0.30.0"
 uuid6 = "^2024.7.10"
+redis = "^5.1.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.3"

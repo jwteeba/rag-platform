@@ -64,3 +64,23 @@ class TokenResponse(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+
+class SessionResponse(BaseModel):
+    """A single active session — i.e. an unrevoked, unexpired refresh token.
+
+    Deliberately doesn't expose the `jti` as anything other than an opaque
+    session identifier in its own right (it happens to equal the JWT's
+    `jti` claim, but callers shouldn't need to know that) — used as the
+    path parameter for `DELETE /users/me/sessions/{session_id}`. Built
+    explicitly in the router rather than via `model_validate`, since the
+    field name intentionally doesn't match the domain object's `jti`
+    attribute.
+    """
+
+    session_id: str
+    expires_at: datetime
+
+
+class SessionListResponse(BaseModel):
+    items: list[SessionResponse]

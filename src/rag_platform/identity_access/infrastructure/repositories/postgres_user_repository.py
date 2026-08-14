@@ -1,4 +1,9 @@
-"""Postgres-backed implementation of `UserRepositoryPort`."""
+"""Postgres-backed implementation of `UserRepositoryPort`.
+
+Swaps in for `InMemoryUserRepository` (Phase 2) behind the same port — see
+ADR-0005 and ADR-0006. No change to `identity_access/application/` or
+`identity_access/domain/` was needed to add this.
+"""
 
 from __future__ import annotations
 
@@ -50,7 +55,9 @@ class PostgresUserRepository(UserRepositoryPort):
         await self._session.flush()
 
     async def get_by_id(self, user_id: uuid.UUID) -> User | None:
-        model = await self._session.get(UserModel, user_id)
+        stmt = select(UserModel).where(UserModel.id == user_id)
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
         return _to_domain(model) if model is not None else None
 
     async def get_by_email(self, email: str) -> User | None:
@@ -60,7 +67,9 @@ class PostgresUserRepository(UserRepositoryPort):
         return _to_domain(model) if model is not None else None
 
     async def update(self, user: User) -> None:
-        model = await self._session.get(UserModel, user.id)
+        stmt = select(UserModel).where(UserModel.id == user.id)
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
         if model is None:
             # The port contract assumes `update` is only called for a user
             # that was previously loaded via this repository — mirrors what

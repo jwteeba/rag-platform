@@ -4,14 +4,14 @@ Enterprise-grade Retrieval-Augmented Generation service API. See
 [`docs/architecture.md`](docs/architecture.md) for the full architecture and
 [`docs/adr/`](docs/adr) for the history of architectural decisions.
 
-**Current phase: Phase 3 — database (SQLAlchemy 2.0 async ORM, Alembic
-migrations, Postgres-backed repositories).** `identity_access` now persists
-to a real Postgres database — the in-memory adapters from Phase 2 are still
-shipped and unit-tested (see [ADR-0005](docs/adr/0005-in-memory-persistence-for-phase-2-auth.md)),
-but the running application uses Postgres via the same ports (see
-[ADR-0006](docs/adr/0006-postgres-persistence-identity-access.md)). Cache,
-storage, and RAG functionality still don't exist. See `docs/architecture.md`
-§Phases for what's still ahead.
+**Current phase: Phase 4 — Redis caching and session management.** A
+Redis-backed cache-aside layer now sits in front of refresh-token
+revocation checks (Postgres remains the source of truth — see
+[ADR-0007](docs/adr/0007-redis-caching-and-session-management.md)), and
+`identity_access` gained user-facing session control (`GET
+/users/me/sessions`, revoke one or all). Storage and RAG functionality
+still don't exist. See `docs/architecture.md` §Phases for what's still
+ahead.
 
 ## Requirements
 
@@ -20,6 +20,8 @@ storage, and RAG functionality still don't exist. See `docs/architecture.md`
 - Docker + Docker Compose (for containerized runs)
 - PostgreSQL 16 reachable at `APP_DATABASE_URL` — either via `make docker-up`
   (starts a `postgres` container for you) or a local install
+- Redis 7 reachable at `APP_REDIS_URL` — either via `make docker-up`
+  (starts a `redis` container for you) or a local install
 
 ## Getting started
 
@@ -30,8 +32,8 @@ make install
 # Copy environment template and adjust as needed
 cp .env.example .env
 
-# Start Postgres if you don't already have one reachable (skip if you do)
-docker compose up -d postgres
+# Start Postgres and Redis if you don't already have them reachable (skip if you do)
+docker compose up -d postgres redis
 
 # Apply database migrations
 make db-upgrade
@@ -51,6 +53,9 @@ The API is now available at `http://localhost:8000`:
 - `POST /api/v1/auth/refresh` — rotate a refresh token for a new pair
 - `POST /api/v1/auth/logout` — revoke a refresh token
 - `GET /api/v1/users/me` / `PATCH /api/v1/users/me` — self-service profile
+- `GET /api/v1/users/me/sessions` — list active sessions (one per unrevoked refresh token)
+- `DELETE /api/v1/users/me/sessions/{session_id}` — revoke one session ("log out this device")
+- `POST /api/v1/users/me/sessions/revoke-all` — revoke every session ("log out everywhere")
 - `GET /api/v1/users`, `GET /api/v1/users/{id}`, `PATCH /api/v1/users/{id}` — admin only (`users:read` / `users:manage`)
 
 To reach the admin-only endpoints on a fresh instance, set
@@ -64,11 +69,12 @@ assigns the MEMBER role.
 make docker-up
 ```
 
-This starts `postgres` (with a healthcheck the `api` service waits on) and
-builds/starts the `api` service on `http://localhost:8000` with live reload
-against your local `src/` directory. Run `make db-upgrade` once Postgres is
-up if this is a fresh volume. Redis, MinIO, Qdrant, and OpenSearch are added
-in the phases that introduce each dependency (4, 5, 9).
+This starts `postgres` and `redis` (each with a healthcheck the `api`
+service waits on) and builds/starts the `api` service on
+`http://localhost:8000` with live reload against your local `src/`
+directory. Run `make db-upgrade` once Postgres is up if this is a fresh
+volume. MinIO, Qdrant, and OpenSearch are added in the phases that
+introduce each dependency (5, 9).
 
 ## Database migrations
 
@@ -98,29 +104,34 @@ make pre-commit-install  # install git hooks (run once)
 All four checks (`ruff`, `black --check`, `mypy`, `pytest`) must pass before
 a PR merges — this is enforced identically in `.github/workflows/ci.yml`.
 
-**`make test` always runs against Docker Compose's `postgres` service, never
-a local/native Postgres install.** It's self-contained: it starts the
-`postgres` container if it isn't already running, waits for it to report
-healthy, creates the dedicated `rag_platform_test` database inside it if
-missing, and points the test run at it explicitly — overriding anything set
-in your shell or `.env`. You don't need Postgres running yourself before
-`make test`; you do need Docker running. This exists because a locally
-installed Postgres commonly also listens on port 5432, and whichever
-process binds it first "wins" silently — `make test` sidesteps that
-ambiguity entirely by always using Docker's Postgres on its own dedicated
-port (5433) and never trusting ambient host state.
+**`make test` always runs against Docker Compose's `postgres` and `redis`
+services, never a local/native install of either.** It's self-contained: it
+starts both containers if they aren't already running, waits for each to
+report healthy, creates the dedicated `rag_platform_test` database inside
+Postgres if missing, and points the test run at both explicitly —
+overriding anything set in your shell or `.env`. You don't need Postgres or
+Redis running yourself before `make test`; you do need Docker running. This
+exists because a locally installed Postgres/Redis commonly also listens on
+the default ports (5432/6379), and whichever process binds first "wins"
+silently — `make test` sidesteps that ambiguity entirely by always using
+Docker's containers on their own dedicated ports (5433/6380) and never
+trusting ambient host state.
 
-Every table in the test database is truncated before each test that needs
-it (see `tests/conftest.py::clean_database`) — this is why it's a database
-dedicated to tests, never your real `rag_platform` dev database.
+Every table in the test database is truncated, and the test run's logical
+Redis DB (index 1, not `make dev`'s 0) is flushed, before each test that
+needs them (see `tests/conftest.py::clean_database` /
+`clean_cache`) — this is why they're dedicated to tests, never your real
+`rag_platform` dev database or dev cache.
 
 If you'd rather run `pytest` directly (bypassing `make test`'s Docker
-orchestration) — e.g. to point tests at a non-Docker Postgres — set
-`APP_TEST_DATABASE_URL` yourself (see `.env.example`); `tests/conftest.py`
-falls back to Docker's default connection string only if that's unset.
+orchestration) — e.g. to point tests at a non-Docker Postgres/Redis — set
+`APP_TEST_DATABASE_URL` / `APP_TEST_REDIS_URL` yourself (see
+`.env.example`); `tests/conftest.py` falls back to Docker's default
+connection strings only if those are unset.
 
-CI provisions its own disposable Postgres service directly (not via Docker
-Compose) and runs `pytest` the same way — no changes needed there.
+CI provisions its own disposable Postgres and Redis services directly (not
+via Docker Compose) and runs `pytest` the same way — no changes needed
+there.
 
 ## Manual smoke test
 
@@ -141,15 +152,20 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 
 curl http://localhost:8000/api/v1/users/me \
   -H 'Authorization: Bearer <access_token from above>'
+
+# log in again to create a second "session", then list them
+curl http://localhost:8000/api/v1/users/me/sessions \
+  -H 'Authorization: Bearer <access_token from above>'
 ```
 
 Expected: health checks return `200 OK` with `X-Request-ID` and
 `X-Correlation-ID` headers — `/health/ready` performs a real `SELECT 1`
-against Postgres and returns `503` if it's unreachable, not just `200`
-unconditionally; register returns `201` with the new user (never the
-password), now actually persisted in the `users` table (`psql
-$APP_DATABASE_URL -c 'SELECT email, role FROM users;'` to see it); login
-returns a token pair; `/users/me` returns that user's profile.
+against Postgres and a real `PING` against Redis, returning `503` if either
+is unreachable, not just `200` unconditionally; register returns `201` with
+the new user (never the password), now actually persisted in the `users`
+table (`psql $APP_DATABASE_URL -c 'SELECT email, role FROM users;'` to see
+it); login returns a token pair; `/users/me` returns that user's profile;
+`/users/me/sessions` lists one entry per still-valid refresh token.
 
 Every error response — from our own domain exceptions, from FastAPI's
 `OAuth2PasswordBearer` (e.g. no token supplied), and from Pydantic request
@@ -168,14 +184,17 @@ src/rag_platform/
 ├── main.py            # FastAPI app factory — no business logic here
 ├── core/               # Shared/Core: settings, logging, errors, middleware,
 │                       # security primitives (hashing/JWT), pagination,
-│                       # SQLAlchemy Base/mixins (db.py), UUIDv7 ids (ids.py)
+│                       # SQLAlchemy Base/mixins (db.py), UUIDv7 ids (ids.py),
+│                       # Redis client + CacheService (cache.py)
 ├── platform/           # Cross-cutting infra: health, database session
-│                       # dependency. cache/, queue/, storage/, eventbus/
-│                       # arrive in Phases 4, 5, 15
-├── identity_access/    # auth, users, roles/permissions (RBAC).
+│                       # dependency. storage/, queue/, eventbus/ arrive in
+│                       # Phases 5, 15
+├── identity_access/    # auth, users, roles/permissions (RBAC), sessions.
 │                       # Postgres-backed — see ADR-0006 (in-memory
 │                       # adapters from ADR-0005 still shipped, unit-tested,
-│                       # just not what's wired into the running app)
+│                       # just not what's wired into the running app) —
+│                       # wrapped in a Redis cache-aside layer for refresh-
+│                       # token lookups as of Phase 4 (ADR-0007)
 ├── di/                 # Dependency injection container wiring
 └── <other contexts>/   # document_management, indexing, retrieval,
                         # generation — added in later phases

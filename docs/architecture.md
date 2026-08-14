@@ -52,8 +52,9 @@ API  →  Application  →  Domain  ←  Infrastructure
 | Vector store | **Qdrant**, not ChromaDB — behind `VectorIndexPort` | [0002](adr/0002-vector-store-qdrant.md) |
 | Deployment target | **Platform-agnostic** — standard Dockerfile, no PaaS-specific manifest in this repo | [0003](adr/0003-deployment-target-render.md) (superseded), [0004](adr/0004-deployment-target-platform-agnostic.md) |
 | Multi-tenancy | **Single shared schema, `workspace_id` scoping** | (applied directly in Phase 3 domain models — no dedicated ADR needed, it's a straightforward default rather than a reversal of an earlier plan) |
-| IdentityAccess persistence | **In-memory adapters (Phase 2, ADR-0005)** still shipped and unit-tested; **Postgres adapters (Phase 3, ADR-0006)** are what the running application actually uses, behind the same `UserRepositoryPort` / `RefreshTokenStorePort` | [0005](adr/0005-in-memory-persistence-for-phase-2-auth.md), [0006](adr/0006-postgres-persistence-identity-access.md) |
+| IdentityAccess persistence | **In-memory adapters (Phase 2, ADR-0005)** still shipped and unit-tested; **Postgres adapters (Phase 3, ADR-0006)**, further wrapped in a **Redis cache-aside layer (Phase 4, ADR-0007)** for refresh-token lookups, are what the running application actually uses — all behind the same `UserRepositoryPort` / `RefreshTokenStorePort` | [0005](adr/0005-in-memory-persistence-for-phase-2-auth.md), [0006](adr/0006-postgres-persistence-identity-access.md), [0007](adr/0007-redis-caching-and-session-management.md) |
 | RBAC model | **Fixed two roles** (ADMIN, MEMBER); permissions (not roles) are what's checked everywhere, so dynamic roles later is a contained change | [0005](adr/0005-in-memory-persistence-for-phase-2-auth.md) |
+| Caching / "session management" scope | **Generic Redis infra + one concrete consumer** (refresh-token cache-aside), not speculative caching for embeddings/LLM/etc. that don't exist yet. "Session management" interpreted as literal user-facing session control (list/revoke sessions), since refresh tokens are the only session-like concept this app has | [0007](adr/0007-redis-caching-and-session-management.md) |
 
 The multi-tenancy choice means every tenant-*owned* table (documents,
 chunks, conversations, etc., in later phases) will carry a `workspace_id`
@@ -96,37 +97,41 @@ rag-platform/
 │   │   ├── pagination.py       # cursor pagination
 │   │   ├── ids.py              # Phase 3: UUIDv7 generation
 │   │   ├── db.py               # Phase 3: SQLAlchemy Base, mixins, engine
+│   │   ├── cache.py            # Phase 4: Redis client, CacheService
 │   │   └── middleware/
 │   ├── platform/
-│   │   ├── health/              # real DB connectivity check as of Phase 3
+│   │   ├── health/              # real DB + Redis connectivity checks
 │   │   └── database/            # Phase 3: get_db_session FastAPI dependency
-│   │                            # cache/, queue/, storage/, eventbus/
-│   │                            # arrive in Phases 4, 5, 15
-│   ├── identity_access/        # auth, users, RBAC
-│   │   ├── api/v1/             # auth_router, users_router, dependencies
+│   │                            # queue/, storage/, eventbus/ arrive in
+│   │                            # Phases 5, 15
+│   ├── identity_access/        # auth, users, RBAC, sessions
+│   │   ├── api/v1/             # auth_router, users_router (incl.
+│   │   │                       # /me/sessions/*), dependencies
 │   │   ├── application/        # AuthenticationService, UserService
 │   │   ├── domain/              # User entity, Role/Permission, ports
-│   │   └── infrastructure/     # bcrypt/JWT adapters; in-memory repos
-│   │                            # (Phase 2) AND Postgres repos (Phase 3),
-│   │                            # both implementing the same ports
+│   │   └── infrastructure/     # bcrypt/JWT adapters; in-memory (Phase 2),
+│   │                            # Postgres (Phase 3), and Redis-cached
+│   │                            # (Phase 4, wraps Postgres) repos, all
+│   │                            # implementing the same ports
 │   ├── di/                     # DI container wiring
 │   └── <other contexts>/       # document_management, indexing,
 │                               # retrieval, generation — later phases
 └── tests/
-    ├── unit/                   # no DB dependency — in-memory adapters only
-    ├── integration/            # Phase 3: real Postgres (di container,
-    │                           # Postgres repositories)
-    ├── api/                    # full app, real Postgres as of Phase 3
+    ├── unit/                   # no DB/Redis dependency — in-memory adapters only
+    ├── integration/            # real Postgres + Redis (di container,
+    │                           # Postgres repos, CacheService, the Redis
+    │                           # cache-aside wrapper)
+    ├── api/                    # full app, real Postgres + Redis
     └── factories/
 ```
 
 Bounded-context packages not yet created (`document_management/`,
 `indexing/`, `retrieval/`, `generation/`) will each mirror the four-layer
 structure exactly when their phase arrives — `identity_access/` is the
-reference example of that structure in practice, now with two working
-Infrastructure adapters (in-memory, Postgres) for the same two ports as a
-concrete demonstration of why the port/adapter boundary is drawn where it
-is.
+reference example of that structure in practice, now with three working
+Infrastructure adapters (in-memory, Postgres, Redis-cached-Postgres) for
+the same `RefreshTokenStorePort` as a concrete demonstration of why the
+port/adapter boundary is drawn where it is.
 
 ## Cross-cutting conventions
 
@@ -156,9 +161,19 @@ is.
   repository are themselves built per-request from that session (see
   `identity_access/api/v1/dependencies.py`), not held as process-wide
   singletons — the DI container only holds the engine, session factory, and
-  genuinely stateless singletons (password hasher, token service). See
-  ADR-0006 for why this changed from Phase 2's simpler singleton-service
-  container.
+  genuinely stateless singletons (password hasher, token service, Redis
+  client, `CacheService`). See ADR-0006 for why this changed from Phase 2's
+  simpler singleton-service container.
+- **Caching**: Redis, via `core/cache.py`'s `CacheService` — a generic
+  cache-aside helper (JSON-serializable values, mandatory TTL). Unlike the
+  per-request DB session, the Redis client *is* a safe process-wide
+  singleton (it multiplexes over its own connection pool). One concrete
+  consumer exists so far: `CachedRefreshTokenStore`, wrapping the Postgres
+  refresh-token store. See ADR-0007 for scope and an honest note on what
+  benefit this actually provides given refresh tokens are single-use.
+- **Sessions**: "session" means an unrevoked, unexpired refresh token.
+  `GET /users/me/sessions` / `DELETE .../sessions/{id}` / `POST
+  .../sessions/revoke-all` — see ADR-0007.
 - **AuthN/AuthZ**: JWT bearer tokens (`Authorization: Bearer <token>`),
   validated by `identity_access`'s `get_current_user` FastAPI dependency.
   Permission checks are declarative at the route decorator
@@ -171,11 +186,12 @@ is.
   bounded context's ORM models import into `alembic/env.py` so they
   register). `make db-upgrade` / `make db-revision m="..."` — see README.
 - **Testing**: every service gets a unit test against mocked or in-memory
-  ports; every route gets an API test; every Postgres-backed adapter gets an
-  integration test against a real, isolated test database (truncated before
-  each test — see `tests/conftest.py::clean_database`). Nothing merges
+  ports; every route gets an API test; every Postgres/Redis-backed adapter
+  gets an integration test against a real, isolated test database and
+  Redis keyspace (both reset before each test — see
+  `tests/conftest.py::clean_database` / `clean_cache`). Nothing merges
   without `make check` passing, and CI provisions its own disposable
-  Postgres service to run it.
+  Postgres and Redis services to run it.
 
 ## Phase status
 
@@ -190,6 +206,11 @@ is.
   Postgres-backed `UserRepositoryPort` / `RefreshTokenStorePort`
   implementations swapped in for Phase 2's in-memory adapters (ADR-0006),
   UUIDv7 primary keys, real DB connectivity check on `/health/ready`.
+  Complete.
+- **Phase 4** — Redis: generic `CacheService` infra, a cache-aside layer
+  in front of refresh-token revocation checks (ADR-0007), and user-facing
+  session management (list/revoke sessions, revoke-all/"log out
+  everywhere"), plus a real Redis connectivity check on `/health/ready`.
   Complete (this document reflects it).
-- **Phase 4+** — Not started. See the phase list in the original project
+- **Phase 5+** — Not started. See the phase list in the original project
   brief; each phase's own PR/commit will update this document as it lands.

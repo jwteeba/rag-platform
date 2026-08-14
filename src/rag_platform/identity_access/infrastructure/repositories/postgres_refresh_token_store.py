@@ -1,10 +1,16 @@
-"""Postgres-backed implementation of `RefreshTokenStorePort`."""
+"""Postgres-backed implementation of `RefreshTokenStorePort`.
+
+Swaps in for `InMemoryRefreshTokenStore` (Phase 2) behind the same port —
+see ADR-0005 and ADR-0006. As of Phase 4, this is itself wrapped by
+`CachedRefreshTokenStore` in `di/containers.py` — Postgres stays the
+source of truth here; the cache-aside layer sits in front of it.
+"""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import update
+from sqlalchemy import func, select, update
 
 from rag_platform.identity_access.domain.ports import IssuedRefreshToken, RefreshTokenStorePort
 from rag_platform.identity_access.infrastructure.models import RefreshTokenModel
@@ -55,3 +61,12 @@ class PostgresRefreshTokenStore(RefreshTokenStorePort):
         )
         await self._session.execute(stmt)
         await self._session.flush()
+
+    async def list_active_for_user(self, user_id: uuid.UUID) -> list[IssuedRefreshToken]:
+        stmt = select(RefreshTokenModel).where(
+            RefreshTokenModel.user_id == user_id,
+            RefreshTokenModel.revoked.is_(False),
+            RefreshTokenModel.expires_at > func.now(),
+        )
+        result = await self._session.execute(stmt)
+        return [_to_domain(m) for m in result.scalars().all()]

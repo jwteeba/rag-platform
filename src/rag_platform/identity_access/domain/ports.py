@@ -80,6 +80,17 @@ class RefreshTokenStorePort(ABC):
     @abstractmethod
     async def revoke_all_for_user(self, user_id: uuid.UUID) -> None: ...
 
+    @abstractmethod
+    async def list_active_for_user(self, user_id: uuid.UUID) -> list[IssuedRefreshToken]:
+        """Return every unrevoked, unexpired refresh token for `user_id`.
+
+        Each one represents a "session" from the user's point of view — the
+        basis for `GET /users/me/sessions` (Phase 4). Ordered by
+        `expires_at` ascending is not guaranteed; callers that need a
+        specific order should sort themselves.
+        """
+        ...
+
 
 class PasswordHasherPort(Protocol):
     """Hashes and verifies passwords. Implemented by a bcrypt adapter."""

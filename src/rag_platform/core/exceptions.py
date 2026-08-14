@@ -5,6 +5,11 @@ subclass `ApplicationError` rather than a bare `Exception`, so the error
 handling middleware (`core/middleware/error_handling.py`) can map it to a
 consistent RFC 7807 problem+json response without each route needing its own
 try/except block.
+
+Future phases add more specific subclasses as their domains need them (e.g.
+`DocumentNotFoundError` in Phase 3, `InvalidCredentialsError` in Phase 2).
+Only the base hierarchy needed by Phase 1 (generic + not-found + validation)
+is defined here.
 """
 
 from __future__ import annotations

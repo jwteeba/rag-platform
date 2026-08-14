@@ -69,17 +69,12 @@ class TimestampMixin:
 
 def build_engine(settings: Settings) -> AsyncEngine:
     """Create the async SQLAlchemy engine from application settings."""
-
-    connect_args: dict[str, object] = {"prepared_statement_cache_size": 0}
-    if settings.database_ssl_mode is not None:
-        connect_args["ssl"] = settings.database_ssl_mode
     return create_async_engine(
         settings.database_url,
         echo=settings.database_echo,
         pool_size=settings.database_pool_size,
         max_overflow=settings.database_max_overflow,
         pool_pre_ping=True,
-        connect_args=connect_args,
     )
 
 

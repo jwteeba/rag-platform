@@ -15,6 +15,10 @@ stateless password hasher and token service); the repositories and
 application services built from them are constructed per-request in
 `identity_access/api/v1/dependencies.py`, one call each per request thanks
 to FastAPI's per-request dependency caching.
+
+Phase 4 addition: a Redis client and `CacheService`, both genuinely safe as
+process-wide singletons (unlike the DB session) — see `core/cache.py`'s
+module docstring for why.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
+from rag_platform.core.cache import CacheService, build_redis_client
 from rag_platform.core.db import build_engine, build_session_factory
 from rag_platform.identity_access.application.dto.auth_dto import RegisterUserInput
 from rag_platform.identity_access.application.services.auth_service import AuthenticationService
@@ -39,6 +44,7 @@ from rag_platform.identity_access.infrastructure.security.password_hasher import
 )
 
 if TYPE_CHECKING:
+    from redis.asyncio import Redis
     from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
     from sqlalchemy.ext.asyncio import AsyncSession as _AsyncSession
 
@@ -51,20 +57,32 @@ class Container:
     """Process-wide singleton instances, built once at application startup.
 
     See the module docstring for why repositories and application services
-    are *not* held here in Phase 3, unlike Phase 2.
+    are *not* held here, unlike Phase 2.
     """
 
     engine: AsyncEngine
     session_factory: async_sessionmaker[_AsyncSession]
     password_hasher: PasswordHasherPort
     token_service: TokenServicePort
+    redis_client: Redis
+    cache_service: CacheService
+    refresh_token_cache_ttl_seconds: int
 
 
 def build_container(settings: Settings) -> Container:
     """Construct the DI container for the given settings.
 
-    `session_factory` opens Postgres-backed
-    `PostgresUserRepository` / `PostgresRefreshTokenStore` instances (see ADR-0006).
+    Phase 3 note: `session_factory` opens Postgres-backed
+    `PostgresUserRepository` / `PostgresRefreshTokenStore` instances (see
+    ADR-0006) — replacing Phase 2's in-memory adapters (ADR-0005) behind the
+    same `UserRepositoryPort` / `RefreshTokenStorePort` interfaces. No
+    change was needed to `identity_access/application/` or
+    `identity_access/domain/` to make this swap.
+
+    Phase 4 note: `redis_client`/`cache_service` back a cache-aside layer
+    (`CachedRefreshTokenStore`, wired in
+    `identity_access/api/v1/dependencies.py`) in front of the Postgres
+    refresh-token store — see ADR-0007.
     """
     engine = build_engine(settings)
     session_factory = build_session_factory(engine)
@@ -77,11 +95,17 @@ def build_container(settings: Settings) -> Container:
         refresh_token_ttl=timedelta(days=settings.refresh_token_expire_days),
     )
 
+    redis_client = build_redis_client(settings)
+    cache_service = CacheService(redis_client)
+
     return Container(
         engine=engine,
         session_factory=session_factory,
         password_hasher=password_hasher,
         token_service=token_service,
+        redis_client=redis_client,
+        cache_service=cache_service,
+        refresh_token_cache_ttl_seconds=settings.refresh_token_cache_ttl_seconds,
     )
 
 
