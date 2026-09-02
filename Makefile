@@ -1,4 +1,4 @@
-.PHONY: install run dev test lint format typecheck check pre-commit-install docker-build docker-up docker-down clean db-upgrade db-downgrade db-revision db-current test-db-up test-db-create test-redis-up test-minio-up
+.PHONY: install run dev worker test lint format typecheck check pre-commit-install docker-build docker-up docker-down clean db-upgrade db-downgrade db-revision db-current test-db-up test-db-create test-redis-up test-minio-up
 
 install:
 	poetry install
@@ -11,6 +11,10 @@ run:
 # Run with auto-reload for local development.
 dev:
 	poetry run uvicorn rag_platform.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Run a local Celery worker (Redis and MinIO must be reachable per .env).
+worker:
+	poetry run celery -A rag_platform.worker.celery worker --loglevel=INFO
 
 # The database/cache/storage `make test` always uses — Docker Compose's
 # `postgres`, `redis`, and `minio` services, on their dedicated host ports

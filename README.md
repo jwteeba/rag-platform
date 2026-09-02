@@ -4,9 +4,11 @@ Enterprise-grade Retrieval-Augmented Generation service API. See
 [`docs/architecture.md`](docs/architecture.md) for the full architecture and
 [`docs/adr/`](docs/adr) for the history of architectural decisions.
 
-**Current phase: Phase 5 — Document upload.** MinIO-backed object storage
+**Current phase: Phase 6 — Celery + background tasks.** MinIO-backed object storage
 now powers document upload, list, get, presigned download, and delete via
 `document_management` (see [ADR-0008](docs/adr/0008-object-storage-minio.md)).
+Celery uses Redis for asynchronous orphaned-object cleanup; the local Flower
+dashboard is at `http://localhost:5555` (see [ADR-0009](docs/adr/0009-celery-background-tasks.md)).
 RAG functionality (indexing, retrieval, generation) still doesn't exist.
 See `docs/architecture.md` §Phases for what's still ahead.
 
@@ -39,6 +41,9 @@ make db-upgrade
 
 # Run with auto-reload
 make dev
+
+# In a second terminal, process queued background jobs
+make worker
 ```
 
 The API is now available at `http://localhost:8000`:
@@ -74,7 +79,7 @@ assigns the MEMBER role.
 make docker-up
 ```
 
-This starts `postgres`, `redis`, and `minio` (each with a healthcheck the
+This starts `postgres`, `redis`, `minio`, a `celery_worker`, and Flower (each dependency with a healthcheck the
 `api` service waits on) and builds/starts the `api` service on
 `http://localhost:8000` with live reload against your local `src/`
 directory. Run `make db-upgrade` once Postgres is up if this is a fresh
@@ -194,6 +199,7 @@ src/rag_platform/
 │                       # MinIO client + bucket helper (storage.py)
 ├── platform/           # Cross-cutting infra: health, database session
 │                       # dependency. queue/, eventbus/ arrive in Phase 15
+├── worker/             # Celery CLI entry point and task logging base
 ├── identity_access/    # auth, users, roles/permissions (RBAC), sessions.
 │                       # Postgres-backed — see ADR-0006 (in-memory
 │                       # adapters from ADR-0005 still shipped, unit-tested,

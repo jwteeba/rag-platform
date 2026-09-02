@@ -14,6 +14,7 @@ from rag_platform.document_management.infrastructure.repositories.postgres_docum
 from rag_platform.document_management.infrastructure.storage.minio_object_storage import (
     MinioObjectStorage,
 )
+from rag_platform.document_management.tasks.storage_cleanup import enqueue_storage_cleanup
 from rag_platform.platform.database.dependencies import get_db_session
 
 
@@ -29,4 +30,5 @@ def get_document_service(
         max_size_bytes=settings.upload_max_size_bytes,
         allowed_content_types=settings.upload_allowed_content_types,
         presigned_expiry_seconds=settings.minio_presigned_expiry_seconds,
+        enqueue_storage_cleanup=enqueue_storage_cleanup,
     )

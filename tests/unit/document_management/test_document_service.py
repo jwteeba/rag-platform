@@ -65,6 +65,11 @@ class FakeObjectStorage(ObjectStoragePort):
         return f"https://example.com/{key}?expires={expiry_seconds}"
 
 
+class FailingDeleteStorage(FakeObjectStorage):
+    async def delete(self, key: str) -> None:
+        raise RuntimeError("MinIO temporarily unavailable")
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -209,19 +214,39 @@ class TestDelete:
         assert await repo.get_by_id(doc.id) is None
         assert doc.storage_key in storage.deleted
 
-    async def test_delete_storage_before_metadata(
+    async def test_delete_attempts_storage_after_metadata(
         self,
         service: DocumentService,
         storage: FakeObjectStorage,
     ) -> None:
-        """Storage is deleted before the metadata row — if storage fails,
-        the metadata row survives and the document remains accessible."""
+        """The happy path removes both the metadata and storage object."""
         owner_id = uuid.uuid4()
         doc = await service.upload(_input(owner_id=owner_id))
 
         # Verify storage key was deleted (storage-first ordering)
         await service.delete(doc.id, requester_id=owner_id)
         assert doc.storage_key in storage.deleted
+
+    async def test_storage_failure_deletes_metadata_and_enqueues_cleanup(
+        self, repo: FakeDocumentRepository
+    ) -> None:
+        storage = FailingDeleteStorage()
+        enqueued: list[str] = []
+        service = DocumentService(
+            repository=repo,
+            storage=storage,
+            max_size_bytes=MAX_SIZE,
+            allowed_content_types=ALLOWED_TYPES,
+            presigned_expiry_seconds=3600,
+            enqueue_storage_cleanup=enqueued.append,
+        )
+        owner_id = uuid.uuid4()
+        doc = await service.upload(_input(owner_id=owner_id))
+
+        await service.delete(doc.id, requester_id=owner_id)
+
+        assert await repo.get_by_id(doc.id) is None
+        assert enqueued == [doc.storage_key]
 
     async def test_delete_other_owners_document_raises(self, service: DocumentService) -> None:
         doc = await service.upload(_input(owner_id=uuid.uuid4()))

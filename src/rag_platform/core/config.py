@@ -121,6 +121,17 @@ class Settings(BaseSettings):
     # comes first.
     refresh_token_cache_ttl_seconds: int = Field(default=60, ge=1)
 
+    # -- Background tasks / Celery (Phase 6) -------------------------------
+    # Redis is already a required platform dependency.  Keep the broker and
+    # result backend on its application URL by default, while allowing ops to
+    # point either one at an isolated Redis logical DB/instance when needed.
+    celery_broker_url: str | None = None
+    celery_result_backend: str | None = None
+    celery_task_always_eager: bool = False
+    celery_task_eager_propagates: bool = True
+    celery_task_time_limit_seconds: int = Field(default=300, ge=1)
+    celery_task_soft_time_limit_seconds: int = Field(default=270, ge=1)
+
     # -- Object storage / MinIO (Phase 5) -----------------------------------
     minio_endpoint: str = "localhost:9000"
     minio_access_key: str = "minioadmin"
@@ -180,6 +191,16 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         return self.environment is Environment.DEVELOPMENT
+
+    @property
+    def resolved_celery_broker_url(self) -> str:
+        """Broker URL, defaulting to the existing Redis deployment."""
+        return self.celery_broker_url or self.redis_url
+
+    @property
+    def resolved_celery_result_backend(self) -> str:
+        """Result backend URL, defaulting to the existing Redis deployment."""
+        return self.celery_result_backend or self.redis_url
 
 
 @lru_cache

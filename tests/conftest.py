@@ -153,6 +153,8 @@ def test_settings(clean_database: None, clean_cache: None) -> Settings:
         allowed_hosts=["*"],
         database_url=TEST_DATABASE_URL,
         redis_url=TEST_REDIS_URL,
+        celery_task_always_eager=True,
+        celery_task_eager_propagates=True,
         minio_endpoint=TEST_MINIO_ENDPOINT,
         minio_bucket=TEST_MINIO_BUCKET,
         minio_access_key="minioadmin",

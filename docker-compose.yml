@@ -89,6 +89,46 @@ services:
       retries: 3
       start_period: 10s
 
+  celery_worker:
+    build:
+      context: .
+      target: builder
+    command: poetry run celery -A rag_platform.worker.celery worker --loglevel=INFO
+    env_file:
+      - .env
+    environment:
+      APP_ENVIRONMENT: development
+      APP_LOG_FORMAT: console
+      APP_REDIS_URL: redis://redis:6379/0
+      APP_MINIO_ENDPOINT: minio:9000
+      APP_MINIO_ACCESS_KEY: minioadmin
+      APP_MINIO_SECRET_KEY: minioadmin
+      APP_MINIO_SECURE: "false"
+    volumes:
+      - ./src:/app/src
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  flower:
+    build:
+      context: .
+      target: builder
+    command: poetry run celery -A rag_platform.worker.celery flower --port=5555
+    ports:
+      - "5555:5555"
+    env_file:
+      - .env
+    environment:
+      APP_REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./src:/app/src
+    depends_on:
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   redis-data:

@@ -53,6 +53,7 @@ API  →  Application  →  Domain  ←  Infrastructure
 | Deployment target | **Platform-agnostic** — standard Dockerfile, no PaaS-specific manifest in this repo | [0003](adr/0003-deployment-target-render.md) (superseded), [0004](adr/0004-deployment-target-platform-agnostic.md) |
 | Multi-tenancy | **Single shared schema, `workspace_id` scoping** | (applied directly in Phase 3 domain models — no dedicated ADR needed, it's a straightforward default rather than a reversal of an earlier plan) |
 | Object storage | **MinIO** (S3-compatible), sync SDK + `asyncio.to_thread`, behind `ObjectStoragePort` | [0008](adr/0008-object-storage-minio.md) |
+| Background jobs | **Celery + Redis**, structured context propagation, eager tests / worker in production | [0009](adr/0009-celery-background-tasks.md) |
 | IdentityAccess persistence | **In-memory adapters (Phase 2, ADR-0005)** still shipped and unit-tested; **Postgres adapters (Phase 3, ADR-0006)**, further wrapped in a **Redis cache-aside layer (Phase 4, ADR-0007)** for refresh-token lookups, are what the running application actually uses — all behind the same `UserRepositoryPort` / `RefreshTokenStorePort` | [0005](adr/0005-in-memory-persistence-for-phase-2-auth.md), [0006](adr/0006-postgres-persistence-identity-access.md), [0007](adr/0007-redis-caching-and-session-management.md) |
 | RBAC model | **Fixed two roles** (ADMIN, MEMBER); permissions (not roles) are what's checked everywhere, so dynamic roles later is a contained change | [0005](adr/0005-in-memory-persistence-for-phase-2-auth.md) |
 | Caching / "session management" scope | **Generic Redis infra + one concrete consumer** (refresh-token cache-aside), not speculative caching for embeddings/LLM/etc. that don't exist yet. "Session management" interpreted as literal user-facing session control (list/revoke sessions), since refresh tokens are the only session-like concept this app has | [0007](adr/0007-redis-caching-and-session-management.md) |
@@ -193,6 +194,11 @@ port/adapter boundary is drawn where it is.
   `tests/conftest.py::clean_database` / `clean_cache`). Nothing merges
   without `make check` passing, and CI provisions its own disposable
   Postgres and Redis services to run it.
+- **Background jobs**: Celery is configured centrally in `core/celery.py`.
+  Tasks auto-discover from bounded contexts and inherit a task base that
+  forwards JSON-safe structlog context through broker headers. Tests set
+  `task_always_eager=True`; Compose runs a real worker and Flower. See
+  ADR-0009 for retry and terminal-failure handling.
 
 ## Phase status
 
@@ -217,4 +223,7 @@ port/adapter boundary is drawn where it is.
   bounded context (upload/list/get/download/delete), `documents` Postgres table,
   presigned URL redirects, MinIO bucket reachability check on `/health/ready`.
   Complete (this document reflects it).
-- **Phase 6+** — Not started.
+- **Phase 6** — Celery background tasks: Redis broker/result backend,
+  worker + Flower, structured task logging, and retryable orphaned-object
+  cleanup. Complete.
+- **Phase 7+** — Document Processing Pipeline, take uploaded documents (raw bytes in MinIO) and produce searchable, chunked text ready for embedding. Not started.
