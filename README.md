@@ -4,14 +4,11 @@ Enterprise-grade Retrieval-Augmented Generation service API. See
 [`docs/architecture.md`](docs/architecture.md) for the full architecture and
 [`docs/adr/`](docs/adr) for the history of architectural decisions.
 
-**Current phase: Phase 4 — Redis caching and session management.** A
-Redis-backed cache-aside layer now sits in front of refresh-token
-revocation checks (Postgres remains the source of truth — see
-[ADR-0007](docs/adr/0007-redis-caching-and-session-management.md)), and
-`identity_access` gained user-facing session control (`GET
-/users/me/sessions`, revoke one or all). Storage and RAG functionality
-still don't exist. See `docs/architecture.md` §Phases for what's still
-ahead.
+**Current phase: Phase 5 — Document upload.** MinIO-backed object storage
+now powers document upload, list, get, presigned download, and delete via
+`document_management` (see [ADR-0008](docs/adr/0008-object-storage-minio.md)).
+RAG functionality (indexing, retrieval, generation) still doesn't exist.
+See `docs/architecture.md` §Phases for what's still ahead.
 
 ## Requirements
 
@@ -22,6 +19,8 @@ ahead.
   (starts a `postgres` container for you) or a local install
 - Redis 7 reachable at `APP_REDIS_URL` — either via `make docker-up`
   (starts a `redis` container for you) or a local install
+- MinIO reachable at `APP_MINIO_ENDPOINT` — either via `make docker-up`
+  (starts a `minio` container for you) or a local install
 
 ## Getting started
 
@@ -32,8 +31,8 @@ make install
 # Copy environment template and adjust as needed
 cp .env.example .env
 
-# Start Postgres and Redis if you don't already have them reachable (skip if you do)
-docker compose up -d postgres redis
+# Start Postgres, Redis, and MinIO if you don't already have them reachable (skip if you do)
+docker compose up -d postgres redis minio
 
 # Apply database migrations
 make db-upgrade
@@ -57,6 +56,12 @@ The API is now available at `http://localhost:8000`:
 - `DELETE /api/v1/users/me/sessions/{session_id}` — revoke one session ("log out this device")
 - `POST /api/v1/users/me/sessions/revoke-all` — revoke every session ("log out everywhere")
 - `GET /api/v1/users`, `GET /api/v1/users/{id}`, `PATCH /api/v1/users/{id}` — admin only (`users:read` / `users:manage`)
+- `POST /api/v1/documents` — upload a document (multipart/form-data `file` field)
+- `GET /api/v1/documents` — list documents owned by the current user
+- `GET /api/v1/documents/{id}` — get document metadata
+- `GET /api/v1/documents/{id}/download` — 307 redirect to a presigned download URL
+- `GET /api/v1/documents/{id}/download-url` — presigned download URL as JSON
+- `DELETE /api/v1/documents/{id}` — delete a document
 
 To reach the admin-only endpoints on a fresh instance, set
 `APP_BOOTSTRAP_ADMIN_EMAIL` / `APP_BOOTSTRAP_ADMIN_PASSWORD` in `.env` before
@@ -69,12 +74,12 @@ assigns the MEMBER role.
 make docker-up
 ```
 
-This starts `postgres` and `redis` (each with a healthcheck the `api`
-service waits on) and builds/starts the `api` service on
+This starts `postgres`, `redis`, and `minio` (each with a healthcheck the
+`api` service waits on) and builds/starts the `api` service on
 `http://localhost:8000` with live reload against your local `src/`
 directory. Run `make db-upgrade` once Postgres is up if this is a fresh
-volume. MinIO, Qdrant, and OpenSearch are added in the phases that
-introduce each dependency (5, 9).
+volume. Qdrant and OpenSearch are added in the phases that introduce each
+dependency (9).
 
 ## Database migrations
 
@@ -104,8 +109,8 @@ make pre-commit-install  # install git hooks (run once)
 All four checks (`ruff`, `black --check`, `mypy`, `pytest`) must pass before
 a PR merges — this is enforced identically in `.github/workflows/ci.yml`.
 
-**`make test` always runs against Docker Compose's `postgres` and `redis`
-services, never a local/native install of either.** It's self-contained: it
+**`make test` always runs against Docker Compose's `postgres`, `redis`, and
+`minio` services, never a local/native install of any of them.** It's self-contained: it
 starts both containers if they aren't already running, waits for each to
 report healthy, creates the dedicated `rag_platform_test` database inside
 Postgres if missing, and points the test run at both explicitly —
@@ -185,19 +190,20 @@ src/rag_platform/
 ├── core/               # Shared/Core: settings, logging, errors, middleware,
 │                       # security primitives (hashing/JWT), pagination,
 │                       # SQLAlchemy Base/mixins (db.py), UUIDv7 ids (ids.py),
-│                       # Redis client + CacheService (cache.py)
+│                       # Redis client + CacheService (cache.py),
+│                       # MinIO client + bucket helper (storage.py)
 ├── platform/           # Cross-cutting infra: health, database session
-│                       # dependency. storage/, queue/, eventbus/ arrive in
-│                       # Phases 5, 15
+│                       # dependency. queue/, eventbus/ arrive in Phase 15
 ├── identity_access/    # auth, users, roles/permissions (RBAC), sessions.
 │                       # Postgres-backed — see ADR-0006 (in-memory
 │                       # adapters from ADR-0005 still shipped, unit-tested,
 │                       # just not what's wired into the running app) —
 │                       # wrapped in a Redis cache-aside layer for refresh-
 │                       # token lookups as of Phase 4 (ADR-0007)
+├── document_management/ # upload, list, get, download, delete — MinIO-backed
+│                        # object storage (ADR-0008), Postgres metadata
 ├── di/                 # Dependency injection container wiring
-└── <other contexts>/   # document_management, indexing, retrieval,
-                        # generation — added in later phases
+└── <other contexts>/   # indexing, retrieval, generation — added in later phases
 
 alembic/                # Migrations — see `make db-*` targets above
 ```

@@ -121,6 +121,26 @@ class Settings(BaseSettings):
     # comes first.
     refresh_token_cache_ttl_seconds: int = Field(default=60, ge=1)
 
+    # -- Object storage / MinIO (Phase 5) -----------------------------------
+    minio_endpoint: str = "localhost:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_secure: bool = False
+    minio_bucket: str = "rag-platform"
+    # Seconds a presigned download URL remains valid.
+    minio_presigned_expiry_seconds: int = Field(default=3600, ge=1)
+
+    # -- Upload constraints (Phase 5) ---------------------------------------
+    upload_max_size_bytes: int = Field(default=50 * 1024 * 1024, ge=1)  # 50 MB
+    upload_allowed_content_types: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: [
+            "application/pdf",
+            "text/plain",
+            "text/markdown",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ]
+    )
+
     @model_validator(mode="after")
     def _reject_default_jwt_secret_in_production(self) -> Settings:
         """Fail fast at startup rather than silently signing production JWTs
@@ -133,7 +153,9 @@ class Settings(BaseSettings):
             )
         return self
 
-    @field_validator("cors_allowed_origins", "allowed_hosts", mode="before")
+    @field_validator(
+        "cors_allowed_origins", "allowed_hosts", "upload_allowed_content_types", mode="before"
+    )
     @classmethod
     def _split_comma_separated(cls, value: object) -> object:
         """Allow comma-separated env values to populate list fields.

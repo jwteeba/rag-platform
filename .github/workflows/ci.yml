@@ -28,7 +28,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
+          key: venv-v2-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
 
       - name: Install dependencies
         run: poetry install --no-interaction
@@ -83,12 +83,40 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
+          key: venv-v2-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
 
       - name: Install dependencies
         run: poetry install --no-interaction
 
+      # GH Actions `services:` can't override the entrypoint/command, so
+      # MinIO is started manually. The container is named `minio` and
+      # health-checked from the runner side before pytest runs.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio:latest server /data
+          echo "Waiting for MinIO to be ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9000/minio/health/live; then
+              echo "MinIO is ready."
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Create MinIO test bucket
+        run: |
+          docker run --rm --network host \
+            -e MC_HOST_local=http://minioadmin:minioadmin@localhost:9000 \
+            minio/mc:latest mb --ignore-existing local/rag-platform-test
+
       - name: Run tests with coverage
+        env:
+          APP_TEST_MINIO_ENDPOINT: localhost:9000
+          APP_TEST_MINIO_BUCKET: rag-platform-test
         run: poetry run pytest
 
       - name: Upload coverage report

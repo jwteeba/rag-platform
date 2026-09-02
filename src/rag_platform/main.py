@@ -29,7 +29,12 @@ from rag_platform.core.middleware.error_handling import (
     validation_error_handler,
 )
 from rag_platform.core.middleware.request_id import RequestIDMiddleware
-from rag_platform.di.containers import build_container, ensure_bootstrap_admin
+from rag_platform.di.containers import (
+    build_container,
+    ensure_bootstrap_admin,
+    ensure_storage_bucket,
+)
+from rag_platform.document_management.api.v1.documents_router import router as documents_router
 from rag_platform.identity_access.api.v1.auth_router import router as auth_router
 from rag_platform.identity_access.api.v1.users_router import router as users_router
 from rag_platform.platform.health.router import router as health_router
@@ -46,6 +51,8 @@ def _build_lifespan(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.container = build_container(settings)
+        app.state.settings = settings
+        await ensure_storage_bucket(app.state.container, settings)
         await ensure_bootstrap_admin(app.state.container, settings)
         logger.info("application_startup_complete")
         yield
@@ -108,6 +115,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router, prefix=settings.api_v1_prefix)
     app.include_router(users_router, prefix=settings.api_v1_prefix)
+    app.include_router(documents_router, prefix=settings.api_v1_prefix)
 
     logger.info(
         "application_configured",

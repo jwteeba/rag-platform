@@ -11,11 +11,14 @@ As of Phase 4, the same applies to Redis (`TEST_REDIS_URL`,
 `clean_cache`) — every key under the test run's logical DB is flushed
 before each test that needs it, for the same reason.
 
+As of Phase 5, `clean_storage` deletes every object in the test MinIO
+bucket before each test that needs it, for the same reason.
+
 Pure `tests/unit/*` tests that exercise ports/services directly with
-in-memory adapters do NOT depend on `clean_database`/`clean_cache` and have
-no Postgres/Redis dependency at all — only fixtures that build a full app
-(`client`, `admin_client`) pull them in, since only those touch the DI
-container's real engine/Redis client.
+in-memory adapters do NOT depend on `clean_database`/`clean_cache`/
+`clean_storage` and have no Postgres/Redis/MinIO dependency at all — only
+fixtures that build a full app (`client`, `admin_client`) pull them in,
+since only those touch the DI container's real engine/Redis/MinIO client.
 """
 
 from __future__ import annotations
@@ -49,6 +52,9 @@ from rag_platform.core.db import Base
 # Importing every context's models explicitly here, mirroring what
 # `alembic/env.py` already has to do for the same reason, removes that
 # fragility rather than depending on incidental import order.
+from rag_platform.document_management.infrastructure import (
+    models as _document_management_models,  # noqa: F401
+)
 from rag_platform.identity_access.infrastructure import (
     models as _identity_access_models,  # noqa: F401
 )
@@ -85,6 +91,15 @@ TEST_DATABASE_URL = os.getenv(
 # port remaps, local install collisions).
 TEST_REDIS_URL = os.getenv("APP_TEST_REDIS_URL", "redis://localhost:6379/1")
 
+# MinIO test endpoint and bucket. `make test` overrides these to point at
+# Docker Compose's minio service (port 9001). Direct `pytest` runs fall back
+# to the defaults below, which work if you have a local MinIO on 9000.
+# Tests that exercise object storage use moto's S3 mock instead of a real
+# MinIO, so these values are only used by the full-app `client` fixture and
+# the MinIO integration test (which is skipped when no real server is up).
+TEST_MINIO_ENDPOINT = os.getenv("APP_TEST_MINIO_ENDPOINT", "localhost:9001")
+TEST_MINIO_BUCKET = os.getenv("APP_TEST_MINIO_BUCKET", "rag-platform-test")
+
 
 @pytest.fixture
 async def clean_database() -> AsyncIterator[None]:
@@ -100,7 +115,7 @@ async def clean_database() -> AsyncIterator[None]:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
         await connection.execute(
-            text("TRUNCATE TABLE refresh_tokens, users RESTART IDENTITY CASCADE")
+            text("TRUNCATE TABLE documents, refresh_tokens, users RESTART IDENTITY CASCADE")
         )
     await engine.dispose()
     yield
@@ -127,6 +142,9 @@ def test_settings(clean_database: None, clean_cache: None) -> Settings:
     is covered implicitly by local `make dev` runs) and marks the
     environment as TESTING so `settings.is_testing` behaves correctly for
     any test that depends on it.
+
+    MinIO settings point at the test bucket; the full-app `client` fixture
+    uses moto to mock S3-protocol calls so no real MinIO is needed.
     """
     return Settings(
         environment=Environment.TESTING,
@@ -135,6 +153,11 @@ def test_settings(clean_database: None, clean_cache: None) -> Settings:
         allowed_hosts=["*"],
         database_url=TEST_DATABASE_URL,
         redis_url=TEST_REDIS_URL,
+        minio_endpoint=TEST_MINIO_ENDPOINT,
+        minio_bucket=TEST_MINIO_BUCKET,
+        minio_access_key="minioadmin",
+        minio_secret_key="minioadmin",
+        minio_secure=False,
     )
 
 

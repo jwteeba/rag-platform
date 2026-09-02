@@ -34,6 +34,9 @@ from rag_platform.core.db import Base
 from rag_platform.identity_access.infrastructure import (
     models as identity_access_models,  # noqa: F401
 )
+from rag_platform.document_management.infrastructure import (
+    models as document_management_models,  # noqa: F401
+)
 
 config = context.config
 
@@ -70,6 +73,7 @@ async def run_migrations_online() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args={"statement_cache_size": 0},
     )
 
     async with connectable.connect() as connection:

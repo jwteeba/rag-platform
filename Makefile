@@ -1,4 +1,4 @@
-.PHONY: install run dev test lint format typecheck check pre-commit-install docker-build docker-up docker-down clean db-upgrade db-downgrade db-revision db-current test-db-up test-db-create test-redis-up
+.PHONY: install run dev test lint format typecheck check pre-commit-install docker-build docker-up docker-down clean db-upgrade db-downgrade db-revision db-current test-db-up test-db-create test-redis-up test-minio-up
 
 install:
 	poetry install
@@ -12,16 +12,16 @@ run:
 dev:
 	poetry run uvicorn rag_platform.main:app --host 0.0.0.0 --port 8000 --reload
 
-# The database/cache `make test` always uses — Docker Compose's `postgres`
-# and `redis` services, on their dedicated host ports (see the port-mapping
-# comments in docker-compose.yml), never whatever else might already be
-# listening on the system defaults 5432/6379. Every `test-*` target below
-# and `test` itself pins these explicitly, overriding any
-# `APP_TEST_DATABASE_URL` / `APP_TEST_REDIS_URL` already present in the
-# shell or `.env` — `make test` must be reproducible regardless of what
-# else is installed on a given machine.
+# The database/cache/storage `make test` always uses — Docker Compose's
+# `postgres`, `redis`, and `minio` services, on their dedicated host ports
+# (see the port-mapping comments in docker-compose.yml), never whatever else
+# might already be listening on the system defaults. Every `test-*` target
+# below and `test` itself pins these explicitly, overriding any
+# APP_TEST_* already present in the shell or `.env`.
 TEST_DATABASE_URL := postgresql+asyncpg://postgres:postgres@localhost:5433/rag_platform_test
 TEST_REDIS_URL := redis://localhost:6380/1
+TEST_MINIO_ENDPOINT := localhost:9000
+TEST_MINIO_BUCKET := rag-platform-test
 
 # Start (or confirm already running) Docker Compose's postgres container,
 # and block until it reports healthy. `-T` on the exec below disables
@@ -41,24 +41,31 @@ test-db-create: test-db-up
 		docker compose exec -T postgres createdb -U postgres rag_platform_test
 
 # Start (or confirm already running) Docker Compose's redis container, and
-# block until it reports healthy. No separate "create" step needed — unlike
-# Postgres, Redis has no equivalent of a named database to provision;
-# `TEST_REDIS_URL` above uses logical DB index 1 (`/1`) rather than 0, so
-# test cache keys never share a keyspace with whatever `make dev` uses.
+# block until it reports healthy.
 test-redis-up:
 	docker compose up -d redis
 	@echo "Waiting for dockerized redis to become healthy..."
 	@until docker compose exec -T redis redis-cli ping > /dev/null 2>&1; do sleep 1; done
 	@echo "Dockerized redis is healthy."
 
-# Runs the suite against Docker Compose's postgres and redis, always —
-# regardless of any local Postgres/Redis install, and regardless of any
-# APP_TEST_DATABASE_URL / APP_TEST_REDIS_URL / APP_DATABASE_URL /
-# APP_REDIS_URL already set in your shell or `.env` (the explicit
-# assignment below overrides all of them for this command only; nothing is
-# permanently exported to your shell).
-test: test-db-create test-redis-up
-	APP_TEST_DATABASE_URL=$(TEST_DATABASE_URL) APP_TEST_REDIS_URL=$(TEST_REDIS_URL) poetry run pytest
+# Start (or confirm already running) Docker Compose's minio container, block
+# until healthy, then ensure the test bucket exists (idempotent).
+test-minio-up:
+	docker compose up -d minio
+	@echo "Waiting for dockerized minio to become healthy..."
+	@until docker compose exec -T minio mc ready local > /dev/null 2>&1; do sleep 1; done
+	@echo "Dockerized minio is healthy."
+	@docker compose exec -T minio mc alias set local http://localhost:9000 minioadmin minioadmin > /dev/null 2>&1 || true
+	@docker compose exec -T minio mc mb --ignore-existing local/$(TEST_MINIO_BUCKET) > /dev/null 2>&1 || true
+
+# Runs the suite against Docker Compose's postgres, redis, and minio, always —
+# regardless of any local install, and regardless of any APP_TEST_* already
+# set in your shell or `.env` (the explicit assignment below overrides all of
+# them for this command only; nothing is permanently exported to your shell).
+test: test-db-create test-redis-up test-minio-up
+	APP_TEST_DATABASE_URL=$(TEST_DATABASE_URL) APP_TEST_REDIS_URL=$(TEST_REDIS_URL) \
+	APP_TEST_MINIO_ENDPOINT=$(TEST_MINIO_ENDPOINT) APP_TEST_MINIO_BUCKET=$(TEST_MINIO_BUCKET) \
+	poetry run pytest
 
 lint:
 	poetry run ruff check .

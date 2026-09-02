@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 
 from rag_platform.core.cache import CacheService, build_redis_client
 from rag_platform.core.db import build_engine, build_session_factory
+from rag_platform.core.storage import build_minio_client, ensure_bucket_exists
 from rag_platform.identity_access.application.dto.auth_dto import RegisterUserInput
 from rag_platform.identity_access.application.services.auth_service import AuthenticationService
 from rag_platform.identity_access.domain.roles import Role
@@ -44,6 +45,7 @@ from rag_platform.identity_access.infrastructure.security.password_hasher import
 )
 
 if TYPE_CHECKING:
+    from minio import Minio
     from redis.asyncio import Redis
     from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
     from sqlalchemy.ext.asyncio import AsyncSession as _AsyncSession
@@ -67,6 +69,7 @@ class Container:
     redis_client: Redis
     cache_service: CacheService
     refresh_token_cache_ttl_seconds: int
+    minio_client: Minio
 
 
 def build_container(settings: Settings) -> Container:
@@ -98,6 +101,8 @@ def build_container(settings: Settings) -> Container:
     redis_client = build_redis_client(settings)
     cache_service = CacheService(redis_client)
 
+    minio_client = build_minio_client(settings)
+
     return Container(
         engine=engine,
         session_factory=session_factory,
@@ -106,7 +111,20 @@ def build_container(settings: Settings) -> Container:
         redis_client=redis_client,
         cache_service=cache_service,
         refresh_token_cache_ttl_seconds=settings.refresh_token_cache_ttl_seconds,
+        minio_client=minio_client,
     )
+
+
+async def ensure_storage_bucket(container: Container, settings: Settings) -> None:
+    """Ensure the configured MinIO bucket exists at startup.
+
+    Idempotent — safe to call on every startup. Wraps the synchronous
+    `ensure_bucket_exists` in `asyncio.to_thread` so the event loop is not
+    blocked during startup.
+    """
+    import asyncio
+
+    await asyncio.to_thread(ensure_bucket_exists, container.minio_client, settings.minio_bucket)
 
 
 async def ensure_bootstrap_admin(container: Container, settings: Settings) -> None:

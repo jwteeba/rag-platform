@@ -74,7 +74,8 @@ def build_engine(settings: Settings) -> AsyncEngine:
         echo=settings.database_echo,
         pool_size=settings.database_pool_size,
         max_overflow=settings.database_max_overflow,
-        pool_pre_ping=True,
+        pool_pre_ping=False,
+        connect_args={"statement_cache_size": 0},
     )
 
 

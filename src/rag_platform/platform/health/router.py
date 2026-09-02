@@ -53,6 +53,7 @@ async def readiness(request: Request, response: Response) -> ReadinessResponse:
     checks: dict[str, str] = {
         "database": await _check_database(container),
         "redis": await _check_redis(container),
+        "storage": await _check_storage(container, settings),
     }
 
     all_ok = all(result == "ok" for result in checks.values())
@@ -87,6 +88,17 @@ async def _check_redis(container: Container) -> str:
     `_check_database` above."""
     try:
         await container.redis_client.ping()
+    except Exception as exc:  # deliberately broad — see docstring
+        return f"unreachable: {exc}"
+    return "ok"
+
+
+async def _check_storage(container: Container, settings: Settings) -> str:
+    """Check MinIO bucket reachability. Same never-raises contract."""
+    import asyncio
+
+    try:
+        await asyncio.to_thread(container.minio_client.bucket_exists, settings.minio_bucket)
     except Exception as exc:  # deliberately broad — see docstring
         return f"unreachable: {exc}"
     return "ok"
