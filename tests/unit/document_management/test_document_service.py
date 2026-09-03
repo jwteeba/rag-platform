@@ -11,7 +11,7 @@ import pytest
 
 from rag_platform.document_management.application.dto.document_dto import UploadDocumentInput
 from rag_platform.document_management.application.services.document_service import DocumentService
-from rag_platform.document_management.domain.entities import Document
+from rag_platform.document_management.domain.entities import Document, DocumentStatus
 from rag_platform.document_management.domain.exceptions import (
     DocumentNotFoundError,
     EmptyFileError,
@@ -48,6 +48,11 @@ class FakeDocumentRepository(DocumentRepositoryPort):
     async def delete(self, document_id: uuid.UUID) -> None:
         self._docs.pop(document_id, None)
 
+    async def set_status(self, document_id: uuid.UUID, status: DocumentStatus) -> None:
+        document = self._docs.get(document_id)
+        if document is not None:
+            document.status = status
+
 
 class FakeObjectStorage(ObjectStoragePort):
     def __init__(self) -> None:
@@ -60,6 +65,9 @@ class FakeObjectStorage(ObjectStoragePort):
     async def delete(self, key: str) -> None:
         self.objects.pop(key, None)
         self.deleted.append(key)
+
+    async def read(self, key: str) -> bytes:
+        return self.objects[key]
 
     async def presigned_download_url(self, key: str, *, expiry_seconds: int) -> str:
         return f"https://example.com/{key}?expires={expiry_seconds}"
@@ -136,6 +144,22 @@ class TestUpload:
         doc = await service.upload(_input())
 
         assert await repo.get_by_id(doc.id) is not None
+
+    async def test_upload_enqueues_processing(self, repo: FakeDocumentRepository) -> None:
+        storage = FakeObjectStorage()
+        enqueued: list[uuid.UUID] = []
+        service = DocumentService(
+            repository=repo,
+            storage=storage,
+            max_size_bytes=MAX_SIZE,
+            allowed_content_types=ALLOWED_TYPES,
+            presigned_expiry_seconds=3600,
+            enqueue_document_processing=enqueued.append,
+        )
+
+        document = await service.upload(_input())
+
+        assert enqueued == [document.id]
 
     async def test_empty_file_raises(self, service: DocumentService) -> None:
         with pytest.raises(EmptyFileError):

@@ -85,6 +85,11 @@ class TestMinioObjectStorage:
         keys = [o["Key"] for o in objects]
         assert "docs/file.pdf" not in keys
 
+    async def test_read_returns_object_bytes(self, storage: MinioObjectStorage) -> None:
+        await storage.upload("docs/file.pdf", b"data", "application/pdf")
+
+        assert await storage.read("docs/file.pdf") == b"data"
+
     async def test_presigned_url_is_a_string(self, s3_client, storage: MinioObjectStorage) -> None:  # type: ignore[no-untyped-def]
         await storage.upload("docs/file.pdf", b"data", "application/pdf")
 

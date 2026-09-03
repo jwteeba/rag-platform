@@ -149,8 +149,18 @@ class Settings(BaseSettings):
             "text/plain",
             "text/markdown",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "image/png",
+            "image/jpeg",
         ]
     )
+
+    # -- Document processing / chunking (Phase 7) --------------------------
+    # Token means whitespace-delimited token here; Phase 8 can replace this
+    # approximation with the embedding model tokenizer without changing the
+    # persistence contract.
+    chunk_size_tokens: int = Field(default=500, ge=1)
+    chunk_overlap_tokens: int = Field(default=50, ge=0)
+    max_chunks_per_document: int = Field(default=1_000, ge=1)
 
     @model_validator(mode="after")
     def _reject_default_jwt_secret_in_production(self) -> Settings:
@@ -162,6 +172,12 @@ class Settings(BaseSettings):
                 "APP_ENVIRONMENT=production. Refusing to start with the "
                 "default development secret."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_chunk_overlap(self) -> Settings:
+        if self.chunk_overlap_tokens >= self.chunk_size_tokens:
+            raise ValueError("chunk_overlap_tokens must be smaller than chunk_size_tokens")
         return self
 
     @field_validator(

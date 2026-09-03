@@ -1,4 +1,4 @@
-.PHONY: install run dev worker test lint format typecheck check pre-commit-install docker-build docker-up docker-down clean db-upgrade db-downgrade db-revision db-current test-db-up test-db-create test-redis-up test-minio-up
+.PHONY: install run dev worker test lint format typecheck check pre-commit-install docker-build docker-up docker-down clean db-upgrade db-downgrade db-revision db-current test-db-up test-db-create test-db-migrate test-redis-up test-minio-up
 
 install:
 	poetry install
@@ -44,6 +44,11 @@ test-db-create: test-db-up
 		"SELECT 1 FROM pg_database WHERE datname = 'rag_platform_test'" | grep -q 1 || \
 		docker compose exec -T postgres createdb -U postgres rag_platform_test
 
+# Bring an existing test database forward before pytest's per-test cleanup.
+# This matters when a developer has kept the Docker volume across migrations.
+test-db-migrate: test-db-create
+	APP_DATABASE_URL=$(TEST_DATABASE_URL) poetry run alembic upgrade head
+
 # Start (or confirm already running) Docker Compose's redis container, and
 # block until it reports healthy.
 test-redis-up:
@@ -66,7 +71,7 @@ test-minio-up:
 # regardless of any local install, and regardless of any APP_TEST_* already
 # set in your shell or `.env` (the explicit assignment below overrides all of
 # them for this command only; nothing is permanently exported to your shell).
-test: test-db-create test-redis-up test-minio-up
+test: test-db-migrate test-redis-up test-minio-up
 	APP_TEST_DATABASE_URL=$(TEST_DATABASE_URL) APP_TEST_REDIS_URL=$(TEST_REDIS_URL) \
 	APP_TEST_MINIO_ENDPOINT=$(TEST_MINIO_ENDPOINT) APP_TEST_MINIO_BUCKET=$(TEST_MINIO_BUCKET) \
 	poetry run pytest

@@ -7,6 +7,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from rag_platform.document_management.domain.entities import DocumentStatus
+
 
 class DocumentResponse(BaseModel):
     id: uuid.UUID
@@ -15,6 +17,7 @@ class DocumentResponse(BaseModel):
     content_type: str
     size_bytes: int
     storage_key: str
+    status: DocumentStatus
     created_at: datetime
     updated_at: datetime
 

@@ -12,7 +12,7 @@ ENV POETRY_VERSION=1.8.3 \
     PIP_NO_CACHE_DIR=1
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl build-essential \
+    && apt-get install -y --no-install-recommends curl build-essential tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -sSL https://install.python-poetry.org | python3 -

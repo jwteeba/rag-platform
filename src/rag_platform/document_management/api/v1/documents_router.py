@@ -21,6 +21,7 @@ from rag_platform.document_management.api.v1.schemas import (
 )
 from rag_platform.document_management.application.dto.document_dto import UploadDocumentInput
 from rag_platform.document_management.application.services.document_service import DocumentService
+from rag_platform.document_management.tasks.process_document import enqueue_document_processing
 from rag_platform.identity_access.api.v1.dependencies import CurrentUser
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -48,6 +49,7 @@ async def upload_document(
             data=data,
         )
     )
+    enqueue_document_processing(document.id)
     return DocumentResponse.model_validate(document)
 
 

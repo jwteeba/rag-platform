@@ -7,7 +7,10 @@ import uuid
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from rag_platform.document_management.domain.entities import Document
+from rag_platform.document_management.domain.entities import Chunk, Document, DocumentStatus
+from rag_platform.document_management.infrastructure.repositories.postgres_chunk_repository import (
+    PostgresChunkRepository,
+)
 from rag_platform.document_management.infrastructure.repositories.postgres_document_repository import (  # noqa: E501
     PostgresDocumentRepository,
 )
@@ -144,3 +147,59 @@ class TestDelete:
 
     async def test_delete_unknown_id_is_noop(self, repo: PostgresDocumentRepository) -> None:
         await repo.delete(uuid.uuid4())  # must not raise
+
+
+class TestDocumentStatus:
+    async def test_set_status_persists(
+        self, repo: PostgresDocumentRepository, session: AsyncSession
+    ) -> None:
+        user = await _make_user(session)
+        document = _make_doc(user.id)
+        await repo.add(document)
+        await repo.set_status(document.id, DocumentStatus.READY)
+        await session.commit()
+
+        found = await repo.get_by_id(document.id)
+        assert found is not None
+        assert found.status is DocumentStatus.READY
+
+
+class TestPostgresChunkRepository:
+    async def test_replace_and_list_chunks(self, session: AsyncSession) -> None:
+        user = await _make_user(session)
+        document = _make_doc(user.id)
+        documents = PostgresDocumentRepository(session)
+        await documents.add(document)
+        repository = PostgresChunkRepository(session)
+        chunks = [
+            Chunk.create(
+                document_id=document.id, content="first chunk", chunk_index=0, token_count=2
+            ),
+            Chunk.create(
+                document_id=document.id, content="second chunk", chunk_index=1, token_count=2
+            ),
+        ]
+
+        await repository.replace_for_document(document.id, chunks)
+        await session.commit()
+
+        found = await repository.list_for_document(document.id)
+        assert [chunk.content for chunk in found] == ["first chunk", "second chunk"]
+
+    async def test_replace_is_idempotent(self, session: AsyncSession) -> None:
+        user = await _make_user(session)
+        document = _make_doc(user.id)
+        await PostgresDocumentRepository(session).add(document)
+        repository = PostgresChunkRepository(session)
+        await repository.replace_for_document(
+            document.id,
+            [Chunk.create(document_id=document.id, content="old", chunk_index=0, token_count=1)],
+        )
+        await repository.replace_for_document(
+            document.id,
+            [Chunk.create(document_id=document.id, content="new", chunk_index=0, token_count=1)],
+        )
+        await session.commit()
+
+        found = await repository.list_for_document(document.id)
+        assert [chunk.content for chunk in found] == ["new"]

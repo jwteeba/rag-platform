@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
-from rag_platform.document_management.domain.entities import Document
+from rag_platform.document_management.domain.entities import Document, DocumentStatus
 from rag_platform.document_management.domain.ports import DocumentRepositoryPort
 from rag_platform.document_management.infrastructure.models import DocumentModel
 
@@ -24,6 +24,7 @@ def _to_domain(model: DocumentModel) -> Document:
         content_type=model.content_type,
         size_bytes=model.size_bytes,
         storage_key=model.storage_key,
+        status=DocumentStatus(model.status),
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
@@ -41,6 +42,7 @@ class PostgresDocumentRepository(DocumentRepositoryPort):
             content_type=document.content_type,
             size_bytes=document.size_bytes,
             storage_key=document.storage_key,
+            status=document.status.value,
         )
         self._session.add(model)
         await self._session.flush()
@@ -75,4 +77,13 @@ class PostgresDocumentRepository(DocumentRepositoryPort):
         model = result.scalar_one_or_none()
         if model is not None:
             await self._session.delete(model)
+            await self._session.flush()
+
+    async def set_status(self, document_id: uuid.UUID, status: DocumentStatus) -> None:
+        result = await self._session.execute(
+            select(DocumentModel).where(DocumentModel.id == document_id)
+        )
+        model = result.scalar_one_or_none()
+        if model is not None:
+            model.status = status.value
             await self._session.flush()

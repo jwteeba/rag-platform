@@ -54,6 +54,7 @@ API  →  Application  →  Domain  ←  Infrastructure
 | Multi-tenancy | **Single shared schema, `workspace_id` scoping** | (applied directly in Phase 3 domain models — no dedicated ADR needed, it's a straightforward default rather than a reversal of an earlier plan) |
 | Object storage | **MinIO** (S3-compatible), sync SDK + `asyncio.to_thread`, behind `ObjectStoragePort` | [0008](adr/0008-object-storage-minio.md) |
 | Background jobs | **Celery + Redis**, structured context propagation, eager tests / worker in production | [0009](adr/0009-celery-background-tasks.md) |
+| Document processing | MIME-specific extraction plus token-window chunks persisted in Postgres | [0010](adr/0010-document-processing-chunking-strategy.md) |
 | IdentityAccess persistence | **In-memory adapters (Phase 2, ADR-0005)** still shipped and unit-tested; **Postgres adapters (Phase 3, ADR-0006)**, further wrapped in a **Redis cache-aside layer (Phase 4, ADR-0007)** for refresh-token lookups, are what the running application actually uses — all behind the same `UserRepositoryPort` / `RefreshTokenStorePort` | [0005](adr/0005-in-memory-persistence-for-phase-2-auth.md), [0006](adr/0006-postgres-persistence-identity-access.md), [0007](adr/0007-redis-caching-and-session-management.md) |
 | RBAC model | **Fixed two roles** (ADMIN, MEMBER); permissions (not roles) are what's checked everywhere, so dynamic roles later is a contained change | [0005](adr/0005-in-memory-persistence-for-phase-2-auth.md) |
 | Caching / "session management" scope | **Generic Redis infra + one concrete consumer** (refresh-token cache-aside), not speculative caching for embeddings/LLM/etc. that don't exist yet. "Session management" interpreted as literal user-facing session control (list/revoke sessions), since refresh tokens are the only session-like concept this app has | [0007](adr/0007-redis-caching-and-session-management.md) |
@@ -226,4 +227,6 @@ port/adapter boundary is drawn where it is.
 - **Phase 6** — Celery background tasks: Redis broker/result backend,
   worker + Flower, structured task logging, and retryable orphaned-object
   cleanup. Complete.
-- **Phase 7+** — Document Processing Pipeline, take uploaded documents (raw bytes in MinIO) and produce searchable, chunked text ready for embedding. Not started.
+- **Phase 7** — Document processing: Celery extraction, status tracking,
+  sliding-window chunks, and Postgres chunk persistence. Complete.
+- **Phase 8+** — Not started.

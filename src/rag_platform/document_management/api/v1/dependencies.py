@@ -14,6 +14,7 @@ from rag_platform.document_management.infrastructure.repositories.postgres_docum
 from rag_platform.document_management.infrastructure.storage.minio_object_storage import (
     MinioObjectStorage,
 )
+from rag_platform.document_management.tasks.process_document import enqueue_document_processing
 from rag_platform.document_management.tasks.storage_cleanup import enqueue_storage_cleanup
 from rag_platform.platform.database.dependencies import get_db_session
 
@@ -31,4 +32,7 @@ def get_document_service(
         allowed_content_types=settings.upload_allowed_content_types,
         presigned_expiry_seconds=settings.minio_presigned_expiry_seconds,
         enqueue_storage_cleanup=enqueue_storage_cleanup,
+        # Full API tests use the real database transaction but do not need a
+        # worker; task-specific tests exercise eager execution explicitly.
+        enqueue_document_processing=(None if settings.is_testing else enqueue_document_processing),
     )

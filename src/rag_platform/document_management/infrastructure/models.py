@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import BigInteger, ForeignKey, String
+from sqlalchemy import BigInteger, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from rag_platform.core.db import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -20,3 +20,16 @@ class DocumentModel(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     content_type: Mapped[str] = mapped_column(String(255), nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     storage_key: Mapped[str] = mapped_column(String(600), unique=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+
+
+class ChunkModel(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    __tablename__ = "chunks"
+    __table_args__ = (UniqueConstraint("document_id", "chunk_index"),)
+
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    token_count: Mapped[int] = mapped_column(Integer, nullable=False)

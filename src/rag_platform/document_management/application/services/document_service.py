@@ -40,6 +40,7 @@ class DocumentService:
         allowed_content_types: list[str],
         presigned_expiry_seconds: int,
         enqueue_storage_cleanup: Callable[[str], None] | None = None,
+        enqueue_document_processing: Callable[[uuid.UUID], None] | None = None,
     ) -> None:
         self._repo = repository
         self._storage = storage
@@ -47,6 +48,7 @@ class DocumentService:
         self._allowed_types = allowed_content_types
         self._expiry = presigned_expiry_seconds
         self._enqueue_storage_cleanup = enqueue_storage_cleanup
+        self._enqueue_document_processing = enqueue_document_processing
 
     async def upload(self, data: UploadDocumentInput) -> Document:
         if len(data.data) == 0:
@@ -66,6 +68,11 @@ class DocumentService:
         # On storage failure the transaction rolls back and the row is gone.
         await self._repo.add(document)
         await self._storage.upload(document.storage_key, data.data, data.content_type)
+        if self._enqueue_document_processing is not None:
+            try:
+                self._enqueue_document_processing(document.id)
+            except Exception:
+                logger.exception("document_processing_enqueue_failed", document_id=str(document.id))
         return document
 
     async def get(self, document_id: uuid.UUID, *, requester_id: uuid.UUID) -> Document:

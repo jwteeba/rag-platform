@@ -8,8 +8,16 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import StrEnum
 
 from rag_platform.core.ids import generate_uuid7
+
+
+class DocumentStatus(StrEnum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    READY = "ready"
+    FAILED = "failed"
 
 
 @dataclass(slots=True)
@@ -27,6 +35,7 @@ class Document:
     content_type: str
     size_bytes: int
     storage_key: str
+    status: DocumentStatus = DocumentStatus.PENDING
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -47,4 +56,27 @@ class Document:
             content_type=content_type,
             size_bytes=size_bytes,
             storage_key=f"{doc_id}/{filename}",
+        )
+
+
+@dataclass(slots=True)
+class Chunk:
+    """A sequential, searchable portion of a processed document."""
+
+    id: uuid.UUID
+    document_id: uuid.UUID
+    content: str
+    chunk_index: int
+    token_count: int
+
+    @classmethod
+    def create(
+        cls, *, document_id: uuid.UUID, content: str, chunk_index: int, token_count: int
+    ) -> Chunk:
+        return cls(
+            id=generate_uuid7(),
+            document_id=document_id,
+            content=content,
+            chunk_index=chunk_index,
+            token_count=token_count,
         )

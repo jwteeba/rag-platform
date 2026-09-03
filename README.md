@@ -4,10 +4,11 @@ Enterprise-grade Retrieval-Augmented Generation service API. See
 [`docs/architecture.md`](docs/architecture.md) for the full architecture and
 [`docs/adr/`](docs/adr) for the history of architectural decisions.
 
-**Current phase: Phase 6 — Celery + background tasks.** MinIO-backed object storage
+**Current phase: Phase 7 — Document processing pipeline.** Uploaded documents
 now powers document upload, list, get, presigned download, and delete via
 `document_management` (see [ADR-0008](docs/adr/0008-object-storage-minio.md)).
-Celery uses Redis for asynchronous orphaned-object cleanup; the local Flower
+are extracted, chunked, and marked ready asynchronously. Celery uses Redis
+for processing and orphaned-object cleanup; the local Flower
 dashboard is at `http://localhost:5555` (see [ADR-0009](docs/adr/0009-celery-background-tasks.md)).
 RAG functionality (indexing, retrieval, generation) still doesn't exist.
 See `docs/architecture.md` §Phases for what's still ahead.

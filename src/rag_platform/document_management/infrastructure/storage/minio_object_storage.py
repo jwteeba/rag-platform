@@ -39,6 +39,17 @@ class MinioObjectStorage(ObjectStoragePort):
     async def delete(self, key: str) -> None:
         await asyncio.to_thread(self._client.remove_object, self._bucket, key)
 
+    async def read(self, key: str) -> bytes:
+        def _get() -> bytes:
+            response = self._client.get_object(self._bucket, key)
+            try:
+                return response.read()
+            finally:
+                response.close()
+                response.release_conn()
+
+        return await asyncio.to_thread(_get)
+
     async def presigned_download_url(self, key: str, *, expiry_seconds: int) -> str:
         def _presign() -> str:
             return self._client.presigned_get_object(
