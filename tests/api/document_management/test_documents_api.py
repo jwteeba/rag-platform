@@ -58,6 +58,12 @@ def doc_client(
         minio_access_key="minioadmin",
         minio_secret_key="minioadmin",
         minio_secure=False,
+        upload_allowed_content_types=[
+            "application/pdf",
+            "text/plain",
+            "text/markdown",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ],
     )
     app = create_app(settings=settings)
     with TestClient(app) as c:

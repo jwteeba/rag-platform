@@ -149,8 +149,6 @@ class Settings(BaseSettings):
             "text/plain",
             "text/markdown",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "image/png",
-            "image/jpeg",
         ]
     )
 
