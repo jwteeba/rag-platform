@@ -8,7 +8,7 @@ license = "Proprietary"
 packages = [{ include = "rag_platform", from = "src" }]
 
 [tool.poetry.dependencies]
-python = "3.12.12"
+python = "3.12.3"
 fastapi = "^0.115.0"
 uvicorn = { extras = ["standard"], version = "^0.32.0" }
 pydantic = "^2.9.0"
@@ -51,6 +51,11 @@ mypy = "^1.11.2"
 pre-commit = "^3.8.0"
 moto = {extras = ["s3"], version = "^5.2.3"}
 flask-cors = "^6.0.5"
+
+[[tool.poetry.source]]
+name = "safety"
+url = "https://pkgs.safetycli.com/repository/student-d6337/project/rag-platform/pypi/simple/"
+priority = "primary"
 
 [build-system]
 requires = ["poetry-core"]

@@ -195,30 +195,7 @@ curl -i http://localhost:8000/api/v1/users/me   # no token → 401
 
 See `docs/architecture.md` for the full rationale. Summary:
 
-```
-src/rag_platform/
-├── main.py            # FastAPI app factory — no business logic here
-├── core/               # Shared/Core: settings, logging, errors, middleware,
-│                       # security primitives (hashing/JWT), pagination,
-│                       # SQLAlchemy Base/mixins (db.py), UUIDv7 ids (ids.py),
-│                       # Redis client + CacheService (cache.py),
-│                       # MinIO client + bucket helper (storage.py)
-├── platform/           # Cross-cutting infra: health, database session
-│                       # dependency. queue/, eventbus/ arrive in Phase 15
-├── worker/             # Celery CLI entry point and task logging base
-├── identity_access/    # auth, users, roles/permissions (RBAC), sessions.
-│                       # Postgres-backed — see ADR-0006 (in-memory
-│                       # adapters from ADR-0005 still shipped, unit-tested,
-│                       # just not what's wired into the running app) —
-│                       # wrapped in a Redis cache-aside layer for refresh-
-│                       # token lookups as of Phase 4 (ADR-0007)
-├── document_management/ # upload, list, get, download, delete — MinIO-backed
-│                        # object storage (ADR-0008), Postgres metadata
-├── di/                 # Dependency injection container wiring
-└── <other contexts>/   # indexing, retrieval, generation — added in later phases
-
-alembic/                # Migrations — see `make db-*` targets above
-```
+![API Docs](images/rag_api_doc.png)
 
 Each bounded context (e.g. `identity_access/`) follows the same four-layer
 structure: `api/` (thin FastAPI routers) → `application/` (use-case

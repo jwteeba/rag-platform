@@ -83,6 +83,7 @@ class TestOpenAIEmbeddingAdapter:
 class TestSentenceTransformerEmbeddingAdapter:
     def test_embed_returns_vectors(self) -> None:
         import numpy as np
+
         pytest.importorskip("sentence_transformers", reason="sentence-transformers not installed")
 
         from rag_platform.indexing.infrastructure.embedding.sentence_transformer_adapter import (

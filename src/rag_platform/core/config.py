@@ -29,8 +29,6 @@ class Environment(StrEnum):
     TESTING = "testing"
     PRODUCTION = "production"
 
-    
-
 
 class LogLevel(StrEnum):
     """Supported structured-logging levels."""
@@ -178,11 +176,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _require_openai_key_when_provider_is_openai(self) -> Settings:
-        if (
-            self.embedding_provider == "openai"
-            and not self.openai_api_key
-            and self.is_production
-        ):
+        if self.embedding_provider == "openai" and not self.openai_api_key and self.is_production:
             raise ValueError(
                 "APP_OPENAI_API_KEY must be set when APP_EMBEDDING_PROVIDER=openai "
                 "in production."

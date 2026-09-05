@@ -2,7 +2,7 @@
 
 Mirrors `core/storage.py`'s role for MinIO — framework-light, no FastAPI.
 The qdrant-client is synchronous by default; callers that need async
-behaviour should wrap in `asyncio.to_thread` (same pattern as MinIO).
+behaviour should wrap in `asyncio.to_thread`.
 """
 
 from __future__ import annotations
@@ -17,8 +17,16 @@ if TYPE_CHECKING:
 
 
 def build_qdrant_client(settings: Settings) -> QdrantClient:
-    """Create a Qdrant client from application settings."""
-    return QdrantClient(url=settings.qdrant_host, api_key=settings.qdrant_api_key)
+    """Create a Qdrant client from application settings.
+
+    Supports:
+    - Local Qdrant without authentication.
+    - Qdrant Cloud with API-key authentication.
+    """
+    return QdrantClient(
+        url=settings.qdrant_host,
+        api_key=settings.qdrant_api_key or None,
+    )
 
 
 def ensure_collection_exists(client: QdrantClient, settings: Settings) -> None:

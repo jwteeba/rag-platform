@@ -129,9 +129,7 @@ async def ensure_vector_collection(container: Container, settings: Settings) -> 
     """
     import asyncio
 
-    await asyncio.to_thread(
-        ensure_collection_exists, container.qdrant_client, settings
-    )
+    await asyncio.to_thread(ensure_collection_exists, container.qdrant_client, settings)
 
 
 async def ensure_storage_bucket(container: Container, settings: Settings) -> None:
