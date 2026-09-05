@@ -20,6 +20,12 @@ class DocumentStatus(StrEnum):
     FAILED = "failed"
 
 
+class EmbeddingStatus(StrEnum):
+    PENDING = "pending"
+    INDEXED = "indexed"
+    FAILED = "failed"
+
+
 @dataclass(slots=True)
 class Document:
     """A document uploaded by a user.
@@ -68,6 +74,8 @@ class Chunk:
     content: str
     chunk_index: int
     token_count: int
+    embedding_id: uuid.UUID | None = None
+    embedding_status: EmbeddingStatus = EmbeddingStatus.PENDING
 
     @classmethod
     def create(

@@ -29,6 +29,8 @@ class Environment(StrEnum):
     TESTING = "testing"
     PRODUCTION = "production"
 
+    
+
 
 class LogLevel(StrEnum):
     """Supported structured-logging levels."""
@@ -159,6 +161,33 @@ class Settings(BaseSettings):
     chunk_size_tokens: int = Field(default=500, ge=1)
     chunk_overlap_tokens: int = Field(default=50, ge=0)
     max_chunks_per_document: int = Field(default=1_000, ge=1)
+
+    # -- Vector store / Qdrant (Phase 8) -----------------------------------
+    qdrant_host: str = "localhost"
+    qdrant_port: int = Field(default=6333, ge=1, le=65535)
+    qdrant_api_key: str | None = None
+    qdrant_collection_name: str = "rag_platform"
+
+    # -- Embeddings (Phase 8) ----------------------------------------------
+    # Provider: "openai" or "local" (sentence-transformers).
+    embedding_provider: str = "openai"
+    embedding_model: str = "text-embedding-3-small"
+    embedding_dimensions: int = Field(default=1536, ge=1)
+    embedding_batch_size: int = Field(default=32, ge=1)
+    openai_api_key: str | None = None
+
+    @model_validator(mode="after")
+    def _require_openai_key_when_provider_is_openai(self) -> Settings:
+        if (
+            self.embedding_provider == "openai"
+            and not self.openai_api_key
+            and self.is_production
+        ):
+            raise ValueError(
+                "APP_OPENAI_API_KEY must be set when APP_EMBEDDING_PROVIDER=openai "
+                "in production."
+            )
+        return self
 
     @model_validator(mode="after")
     def _reject_default_jwt_secret_in_production(self) -> Settings:

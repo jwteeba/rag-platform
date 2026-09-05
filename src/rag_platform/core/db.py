@@ -18,6 +18,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, func
+from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -72,10 +73,13 @@ def build_engine(settings: Settings) -> AsyncEngine:
     return create_async_engine(
         settings.database_url,
         echo=settings.database_echo,
-        pool_size=settings.database_pool_size,
-        max_overflow=settings.database_max_overflow,
-        pool_pre_ping=False,
-        connect_args={"statement_cache_size": 0},
+        poolclass=NullPool,
+        pool_pre_ping=True,
+        connect_args={
+            "prepared_statement_cache_size": 0,
+            "statement_cache_size": 0,
+            "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
+        },
     )
 
 

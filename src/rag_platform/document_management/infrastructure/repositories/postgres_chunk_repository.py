@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, select
 
-from rag_platform.document_management.domain.entities import Chunk
+from rag_platform.document_management.domain.entities import Chunk, EmbeddingStatus
 from rag_platform.document_management.domain.ports import ChunkRepositoryPort
 from rag_platform.document_management.infrastructure.models import ChunkModel
 
@@ -23,6 +23,8 @@ def _to_domain(model: ChunkModel) -> Chunk:
         content=model.content,
         chunk_index=model.chunk_index,
         token_count=model.token_count,
+        embedding_id=model.embedding_id,
+        embedding_status=EmbeddingStatus(model.embedding_status),
     )
 
 
@@ -41,6 +43,8 @@ class PostgresChunkRepository(ChunkRepositoryPort):
                     content=chunk.content,
                     chunk_index=chunk.chunk_index,
                     token_count=chunk.token_count,
+                    embedding_id=chunk.embedding_id,
+                    embedding_status=chunk.embedding_status.value,
                 )
                 for chunk in chunks
             ]

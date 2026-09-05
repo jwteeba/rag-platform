@@ -32,10 +32,8 @@ class TestSettingsEnvParsing:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("APP_ENVIRONMENT", "production")
-        # A real secret is required in production (see
-        # TestProductionSafety below) — set one so this test stays focused
-        # on env-var parsing rather than that separate validation rule.
         monkeypatch.setenv("APP_JWT_SECRET_KEY", "a-real-production-secret")
+        monkeypatch.setenv("APP_OPENAI_API_KEY", "sk-prod-key")
 
         settings = Settings(_env_file=None)
 
@@ -72,6 +70,7 @@ class TestProductionSafety:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("APP_ENVIRONMENT", "production")
+        monkeypatch.setenv("APP_OPENAI_API_KEY", "sk-prod-key")
 
         with pytest.raises(ValueError, match="APP_JWT_SECRET_KEY must be set"):
             Settings(_env_file=None)
@@ -79,6 +78,7 @@ class TestProductionSafety:
     def test_accepts_a_real_secret_in_production(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("APP_ENVIRONMENT", "production")
         monkeypatch.setenv("APP_JWT_SECRET_KEY", "a-real-production-secret")
+        monkeypatch.setenv("APP_OPENAI_API_KEY", "sk-prod-key")
 
         settings = Settings(_env_file=None)
 

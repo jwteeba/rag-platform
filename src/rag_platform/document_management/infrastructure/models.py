@@ -33,3 +33,7 @@ class ChunkModel(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     token_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    embedding_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, default=None)
+    embedding_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending"
+    )

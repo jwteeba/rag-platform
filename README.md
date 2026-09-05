@@ -4,13 +4,17 @@ Enterprise-grade Retrieval-Augmented Generation service API. See
 [`docs/architecture.md`](docs/architecture.md) for the full architecture and
 [`docs/adr/`](docs/adr) for the history of architectural decisions.
 
-**Current phase: Phase 7 — Document processing pipeline.** Uploaded documents
-now powers document upload, list, get, presigned download, and delete via
-`document_management` (see [ADR-0008](docs/adr/0008-object-storage-minio.md)).
-are extracted, chunked, and marked ready asynchronously. Celery uses Redis
-for processing and orphaned-object cleanup; the local Flower
-dashboard is at `http://localhost:5555` (see [ADR-0009](docs/adr/0009-celery-background-tasks.md)).
-RAG functionality (indexing, retrieval, generation) still doesn't exist.
+**Current phase: Phase 8 — Embeddings + Vector Storage.** Chunks produced by
+Phase 7 are now embedded and stored in Qdrant via the `indexing` bounded
+context. The `embed_chunks` Celery task is chained automatically after
+`process_document` completes. Two embedding adapters are provided:
+`OpenAIEmbeddingAdapter` (default, `APP_EMBEDDING_PROVIDER=openai`) and
+`SentenceTransformerEmbeddingAdapter` (local, `APP_EMBEDDING_PROVIDER=local`)
+— both implement the same `EmbeddingPort` and are swappable via config
+(see [ADR-0011](docs/adr/0011-embedding-provider.md)). Qdrant collection
+setup happens at startup alongside the MinIO bucket check
+(see [ADR-0012](docs/adr/0012-vector-store-qdrant-schema.md)).
+RAG retrieval and generation still don't exist.
 See `docs/architecture.md` §Phases for what's still ahead.
 
 ## Requirements
@@ -24,6 +28,8 @@ See `docs/architecture.md` §Phases for what's still ahead.
   (starts a `redis` container for you) or a local install
 - MinIO reachable at `APP_MINIO_ENDPOINT` — either via `make docker-up`
   (starts a `minio` container for you) or a local install
+- Qdrant reachable at `APP_QDRANT_HOST`:`APP_QDRANT_PORT` — either via `make docker-up`
+  (starts a `qdrant` container for you) or a local install
 
 ## Getting started
 
@@ -34,8 +40,8 @@ make install
 # Copy environment template and adjust as needed
 cp .env.example .env
 
-# Start Postgres, Redis, and MinIO if you don't already have them reachable (skip if you do)
-docker compose up -d postgres redis minio
+# Start Postgres, Redis, MinIO, and Qdrant if you don't already have them reachable (skip if you do)
+docker compose up -d postgres redis minio qdrant
 
 # Apply database migrations
 make db-upgrade
@@ -80,12 +86,11 @@ assigns the MEMBER role.
 make docker-up
 ```
 
-This starts `postgres`, `redis`, `minio`, a `celery_worker`, and Flower (each dependency with a healthcheck the
+This starts `postgres`, `redis`, `minio`, `qdrant`, a `celery_worker`, and Flower (each dependency with a healthcheck the
 `api` service waits on) and builds/starts the `api` service on
 `http://localhost:8000` with live reload against your local `src/`
 directory. Run `make db-upgrade` once Postgres is up if this is a fresh
-volume. Qdrant and OpenSearch are added in the phases that introduce each
-dependency (9).
+volume.
 
 ## Database migrations
 

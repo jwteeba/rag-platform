@@ -160,6 +160,9 @@ def test_settings(clean_database: None, clean_cache: None) -> Settings:
         minio_access_key="minioadmin",
         minio_secret_key="minioadmin",
         minio_secure=False,
+        qdrant_host=os.getenv("APP_TEST_QDRANT_HOST", "localhost"),
+        qdrant_port=int(os.getenv("APP_TEST_QDRANT_PORT", "6333")),
+        openai_api_key="sk-test",
     )
 
 

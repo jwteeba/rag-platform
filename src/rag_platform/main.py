@@ -33,6 +33,7 @@ from rag_platform.di.containers import (
     build_container,
     ensure_bootstrap_admin,
     ensure_storage_bucket,
+    ensure_vector_collection,
 )
 from rag_platform.document_management.api.v1.documents_router import router as documents_router
 from rag_platform.identity_access.api.v1.auth_router import router as auth_router
@@ -53,6 +54,7 @@ def _build_lifespan(
         app.state.container = build_container(settings)
         app.state.settings = settings
         await ensure_storage_bucket(app.state.container, settings)
+        await ensure_vector_collection(app.state.container, settings)
         await ensure_bootstrap_admin(app.state.container, settings)
         logger.info("application_startup_complete")
         yield

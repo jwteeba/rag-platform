@@ -1,4 +1,4 @@
-.PHONY: install run dev worker test lint format typecheck check pre-commit-install docker-build docker-up docker-down clean db-upgrade db-downgrade db-revision db-current test-db-up test-db-create test-db-migrate test-redis-up test-minio-up
+.PHONY: install run dev worker test lint format typecheck check pre-commit-install docker-build docker-up docker-down clean db-upgrade db-downgrade db-revision db-current test-db-up test-db-create test-db-migrate test-redis-up test-minio-up test-qdrant-up
 
 install:
 	poetry install
@@ -13,8 +13,10 @@ dev:
 	poetry run uvicorn rag_platform.main:app --host 0.0.0.0 --port 8000 --reload
 
 # Run a local Celery worker (Redis and MinIO must be reachable per .env).
+# Uses --pool=solo on macOS to avoid SIGABRT from forking after asyncpg/OpenAI
+# imports. In production (Linux), the default prefork pool is fine.
 worker:
-	poetry run celery -A rag_platform.worker.celery worker --loglevel=INFO
+	poetry run celery -A rag_platform.worker.celery worker --loglevel=INFO --pool=solo
 
 # The database/cache/storage `make test` always uses — Docker Compose's
 # `postgres`, `redis`, and `minio` services, on their dedicated host ports
@@ -26,6 +28,8 @@ TEST_DATABASE_URL := postgresql+asyncpg://postgres:postgres@localhost:5433/rag_p
 TEST_REDIS_URL := redis://localhost:6380/1
 TEST_MINIO_ENDPOINT := localhost:9000
 TEST_MINIO_BUCKET := rag-platform-test
+TEST_QDRANT_HOST := localhost
+TEST_QDRANT_PORT := 6333
 
 # Start (or confirm already running) Docker Compose's postgres container,
 # and block until it reports healthy. `-T` on the exec below disables
@@ -67,13 +71,22 @@ test-minio-up:
 	@docker compose exec -T minio mc alias set local http://localhost:9000 minioadmin minioadmin > /dev/null 2>&1 || true
 	@docker compose exec -T minio mc mb --ignore-existing local/$(TEST_MINIO_BUCKET) > /dev/null 2>&1 || true
 
-# Runs the suite against Docker Compose's postgres, redis, and minio, always —
+# Start (or confirm already running) Docker Compose's qdrant container, and
+# block until it reports healthy.
+test-qdrant-up:
+	docker compose up -d qdrant
+	@echo "Waiting for dockerized qdrant to become healthy..."
+	@until docker compose exec -T qdrant python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:6333/healthz')" > /dev/null 2>&1; do sleep 1; done
+	@echo "Dockerized qdrant is healthy."
+
+# Runs the suite against Docker Compose's postgres, redis, minio, and qdrant, always —
 # regardless of any local install, and regardless of any APP_TEST_* already
 # set in your shell or `.env` (the explicit assignment below overrides all of
 # them for this command only; nothing is permanently exported to your shell).
-test: test-db-migrate test-redis-up test-minio-up
+test: test-db-migrate test-redis-up test-minio-up test-qdrant-up
 	APP_TEST_DATABASE_URL=$(TEST_DATABASE_URL) APP_TEST_REDIS_URL=$(TEST_REDIS_URL) \
 	APP_TEST_MINIO_ENDPOINT=$(TEST_MINIO_ENDPOINT) APP_TEST_MINIO_BUCKET=$(TEST_MINIO_BUCKET) \
+	APP_TEST_QDRANT_HOST=$(TEST_QDRANT_HOST) APP_TEST_QDRANT_PORT=$(TEST_QDRANT_PORT) \
 	poetry run pytest
 
 lint:

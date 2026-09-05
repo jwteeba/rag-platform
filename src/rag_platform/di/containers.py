@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 from rag_platform.core.cache import CacheService, build_redis_client
 from rag_platform.core.db import build_engine, build_session_factory
 from rag_platform.core.storage import build_minio_client, ensure_bucket_exists
+from rag_platform.core.vector_store import build_qdrant_client, ensure_collection_exists
 from rag_platform.identity_access.application.dto.auth_dto import RegisterUserInput
 from rag_platform.identity_access.application.services.auth_service import AuthenticationService
 from rag_platform.identity_access.domain.roles import Role
@@ -46,6 +47,7 @@ from rag_platform.identity_access.infrastructure.security.password_hasher import
 
 if TYPE_CHECKING:
     from minio import Minio
+    from qdrant_client import QdrantClient
     from redis.asyncio import Redis
     from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
     from sqlalchemy.ext.asyncio import AsyncSession as _AsyncSession
@@ -70,6 +72,7 @@ class Container:
     cache_service: CacheService
     refresh_token_cache_ttl_seconds: int
     minio_client: Minio
+    qdrant_client: QdrantClient
 
 
 def build_container(settings: Settings) -> Container:
@@ -102,6 +105,7 @@ def build_container(settings: Settings) -> Container:
     cache_service = CacheService(redis_client)
 
     minio_client = build_minio_client(settings)
+    qdrant_client = build_qdrant_client(settings)
 
     return Container(
         engine=engine,
@@ -112,6 +116,21 @@ def build_container(settings: Settings) -> Container:
         cache_service=cache_service,
         refresh_token_cache_ttl_seconds=settings.refresh_token_cache_ttl_seconds,
         minio_client=minio_client,
+        qdrant_client=qdrant_client,
+    )
+
+
+async def ensure_vector_collection(container: Container, settings: Settings) -> None:
+    """Ensure the Qdrant collection exists at startup.
+
+    Idempotent — safe to call on every startup. Wraps the synchronous
+    `ensure_collection_exists` in `asyncio.to_thread` so the event loop is
+    not blocked during startup.
+    """
+    import asyncio
+
+    await asyncio.to_thread(
+        ensure_collection_exists, container.qdrant_client, settings
     )
 
 

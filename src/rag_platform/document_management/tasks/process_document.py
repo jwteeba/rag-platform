@@ -24,6 +24,7 @@ from rag_platform.document_management.infrastructure.repositories.postgres_docum
 from rag_platform.document_management.infrastructure.storage.minio_object_storage import (
     MinioObjectStorage,
 )
+from rag_platform.indexing.tasks.embed_chunks import enqueue_embed_chunks
 
 if TYPE_CHECKING:
     from celery import Task
@@ -63,6 +64,7 @@ async def _process(document_id: uuid.UUID) -> int:
         logger.info(
             "document_processing_complete", document_id=str(document_id), chunk_count=len(chunks)
         )
+        enqueue_embed_chunks(document_id)
         return len(chunks)
     finally:
         await engine.dispose()

@@ -52,6 +52,19 @@ services:
       retries: 10
       start_period: 5s
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:6333/healthz')\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
   api:
     build:
       context: .
@@ -72,6 +85,8 @@ services:
       APP_MINIO_ACCESS_KEY: minioadmin
       APP_MINIO_SECRET_KEY: minioadmin
       APP_MINIO_SECURE: "false"
+      APP_QDRANT_HOST: qdrant
+      APP_QDRANT_PORT: "6333"
     volumes:
       - ./src:/app/src
       - ./alembic:/app/alembic
@@ -81,6 +96,8 @@ services:
       redis:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
@@ -104,12 +121,16 @@ services:
       APP_MINIO_ACCESS_KEY: minioadmin
       APP_MINIO_SECRET_KEY: minioadmin
       APP_MINIO_SECURE: "false"
+      APP_QDRANT_HOST: qdrant
+      APP_QDRANT_PORT: "6333"
     volumes:
       - ./src:/app/src
     depends_on:
       redis:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
 
   flower:
@@ -133,3 +154,4 @@ volumes:
   postgres-data:
   redis-data:
   minio-data:
+  qdrant-data:
