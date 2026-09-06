@@ -52,11 +52,6 @@ pre-commit = "^3.8.0"
 moto = {extras = ["s3"], version = "^5.2.3"}
 flask-cors = "^6.0.5"
 
-[[tool.poetry.source]]
-name = "safety"
-url = "https://pkgs.safetycli.com/repository/student-d6337/project/rag-platform/pypi/simple/"
-priority = "primary"
-
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
