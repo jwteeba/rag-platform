@@ -84,7 +84,10 @@ class TestSentenceTransformerEmbeddingAdapter:
     def test_embed_returns_vectors(self) -> None:
         import numpy as np
 
-        pytest.importorskip("sentence_transformers", reason="sentence-transformers not installed")
+        pytest.importorskip(
+            "sentence_transformers",
+            reason="sentence-transformers not installed",
+        )
 
         from rag_platform.indexing.infrastructure.embedding.sentence_transformer_adapter import (
             SentenceTransformerEmbeddingAdapter,
@@ -98,8 +101,15 @@ class TestSentenceTransformerEmbeddingAdapter:
             return_value=mock_model,
         ):
             adapter = SentenceTransformerEmbeddingAdapter(
-                _settings(embedding_provider="local", embedding_model="all-MiniLM-L6-v2")
+                _settings(
+                    embedding_provider="local",
+                    embedding_model="all-MiniLM-L6-v2",
+                )
             )
+
             result = adapter.embed(["hello", "world"])
 
-        assert result == pytest.approx([[0.1, 0.2], [0.3, 0.4]])
+        np.testing.assert_allclose(
+            result,
+            [[0.1, 0.2], [0.3, 0.4]],
+        )
