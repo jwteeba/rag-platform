@@ -32,7 +32,7 @@ services:
       start_period: 5s
 
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     command: server /data --console-address ":9001"
     ports:
       # API on 9000 (remapped to 9000 on host), console on 9001.
