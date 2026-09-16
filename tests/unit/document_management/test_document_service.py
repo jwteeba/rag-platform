@@ -53,6 +53,16 @@ class FakeDocumentRepository(DocumentRepositoryPort):
         if document is not None:
             document.status = status
 
+    async def get_by_owner_and_content_hash(
+        self,
+        owner_id: uuid.UUID,
+        content_hash: str,
+    ) -> Document | None:
+        for document in self._docs.values():
+            if document.owner_id == owner_id and document.content_hash == content_hash:
+                return document
+        return None
+
 
 class FakeObjectStorage(ObjectStoragePort):
     def __init__(self) -> None:
@@ -71,6 +81,9 @@ class FakeObjectStorage(ObjectStoragePort):
 
     async def presigned_download_url(self, key: str, *, expiry_seconds: int) -> str:
         return f"https://example.com/{key}?expires={expiry_seconds}"
+
+    async def exists(self, key: str) -> bool:
+        return key in self._objects
 
 
 class FailingDeleteStorage(FakeObjectStorage):
@@ -214,10 +227,20 @@ class TestList:
 
     async def test_list_respects_limit(self, service: DocumentService) -> None:
         owner = uuid.uuid4()
-        for _ in range(3):
-            await service.upload(_input(owner_id=owner))
 
-        docs, has_more = await service.list_for_user(owner, limit=2, after_id=None)
+        for i in range(3):
+            await service.upload(
+                _input(
+                    owner_id=owner,
+                    data=f"document-{i}".encode(),
+                )
+            )
+
+        docs, has_more = await service.list_for_user(
+            owner,
+            limit=2,
+            after_id=None,
+        )
 
         assert len(docs) == 2
         assert has_more is True

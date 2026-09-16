@@ -56,6 +56,7 @@ def _make_doc(owner_id: uuid.UUID, **overrides: object) -> Document:
         "filename": "test.pdf",
         "content_type": "application/pdf",
         "size_bytes": 1024,
+        "content_hash": "h" * 64,
     }
     defaults.update(overrides)
     return Document.create(**defaults)  # type: ignore[arg-type]
@@ -119,14 +120,28 @@ class TestListForOwner:
         assert docs[0].owner_id == owner.id
 
     async def test_respects_limit(
-        self, repo: PostgresDocumentRepository, session: AsyncSession
+        self,
+        repo: PostgresDocumentRepository,
+        session: AsyncSession,
     ) -> None:
         owner = await _make_user(session)
-        for _ in range(3):
-            await repo.add(_make_doc(owner.id))
+
+        for i in range(3):
+            await repo.add(
+                _make_doc(
+                    owner.id,
+                    content_hash=f"{i:064d}",
+                )
+            )
+
         await session.commit()
 
-        docs, has_more = await repo.list_for_owner(owner.id, limit=2, after_id=None)
+        docs, has_more = await repo.list_for_owner(
+            owner.id,
+            limit=2,
+            after_id=None,
+        )
+
         assert len(docs) == 2
         assert has_more is True
 

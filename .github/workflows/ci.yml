@@ -129,7 +129,7 @@ jobs:
         run: |
           docker run --rm --network host \
             -e MC_HOST_local=http://minioadmin:minioadmin@localhost:9000 \
-            minio/mc:latest mb --ignore-existing local/rag-platform-test
+            quay.io/minio/mc:latest mb --ignore-existing local/rag-platform-test
 
       - name: Run tests with coverage
         env:
