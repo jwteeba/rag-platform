@@ -125,7 +125,7 @@ class TestTokenEncodeDecode:
             decode_token(
                 token,
                 expected_type=TokenType.ACCESS,
-                secret_key="a-different-secret",
+                secret_key="abc" * 32,
                 algorithm=ALGORITHM,
             )
 
