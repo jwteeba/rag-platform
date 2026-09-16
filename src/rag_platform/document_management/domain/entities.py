@@ -31,8 +31,10 @@ class Document:
     """A document uploaded by a user.
 
     `storage_key` is the object path inside the bucket: `{id}/{filename}`.
-    Derived at creation time and never mutated — if a file is re-uploaded
-    it becomes a new Document with a new id.
+    `content_hash` is the SHA-256 hash of the file contents.
+
+    A document with the same content cannot be uploaded more than once
+    by the same owner.
     """
 
     id: uuid.UUID
@@ -40,6 +42,7 @@ class Document:
     filename: str
     content_type: str
     size_bytes: int
+    content_hash: str
     storage_key: str
     status: DocumentStatus = DocumentStatus.PENDING
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -53,14 +56,17 @@ class Document:
         filename: str,
         content_type: str,
         size_bytes: int,
+        content_hash: str,
     ) -> Document:
         doc_id = generate_uuid7()
+
         return cls(
             id=doc_id,
             owner_id=owner_id,
             filename=filename,
             content_type=content_type,
             size_bytes=size_bytes,
+            content_hash=content_hash,
             storage_key=f"{doc_id}/{filename}",
         )
 

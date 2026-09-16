@@ -23,6 +23,11 @@ class DocumentRepositoryPort(ABC):
     async def get_by_id(self, document_id: uuid.UUID) -> Document | None: ...
 
     @abstractmethod
+    async def get_by_owner_and_content_hash(
+        self, owner_id: uuid.UUID, content_hash: str
+    ) -> Document | None: ...
+
+    @abstractmethod
     async def list_for_owner(
         self, owner_id: uuid.UUID, *, limit: int, after_id: uuid.UUID | None
     ) -> tuple[list[Document], bool]: ...
@@ -45,6 +50,9 @@ class ChunkRepositoryPort(ABC):
 class ObjectStoragePort(ABC):
     @abstractmethod
     async def upload(self, key: str, data: bytes, content_type: str) -> None: ...
+
+    @abstractmethod
+    async def exists(self, key: str) -> bool: ...
 
     @abstractmethod
     async def delete(self, key: str) -> None: ...

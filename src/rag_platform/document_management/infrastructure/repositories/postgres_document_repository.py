@@ -5,8 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from rag_platform.document_management.domain.entities import Document, DocumentStatus
+from rag_platform.document_management.domain.exceptions import DuplicateDocumentError
 from rag_platform.document_management.domain.ports import DocumentRepositoryPort
 from rag_platform.document_management.infrastructure.models import DocumentModel
 
@@ -24,6 +26,7 @@ def _to_domain(model: DocumentModel) -> Document:
         content_type=model.content_type,
         size_bytes=model.size_bytes,
         storage_key=model.storage_key,
+        content_hash=model.content_hash,
         status=DocumentStatus(model.status),
         created_at=model.created_at,
         updated_at=model.updated_at,
@@ -41,11 +44,18 @@ class PostgresDocumentRepository(DocumentRepositoryPort):
             filename=document.filename,
             content_type=document.content_type,
             size_bytes=document.size_bytes,
+            content_hash=document.content_hash,
             storage_key=document.storage_key,
             status=document.status.value,
         )
         self._session.add(model)
-        await self._session.flush()
+
+        try:
+            await self._session.flush()
+        except IntegrityError as exc:
+            if "uq_documents_owner_content_hash" in str(exc):
+                raise DuplicateDocumentError() from exc
+            raise
 
     async def get_by_id(self, document_id: uuid.UUID) -> Document | None:
         result = await self._session.execute(
@@ -53,6 +63,25 @@ class PostgresDocumentRepository(DocumentRepositoryPort):
         )
         model = result.scalar_one_or_none()
         return _to_domain(model) if model is not None else None
+
+    async def get_by_owner_and_content_hash(
+        self,
+        owner_id: uuid.UUID,
+        content_hash: str,
+    ) -> Document | None:
+        result = await self._session.execute(
+            select(DocumentModel).where(
+                DocumentModel.owner_id == owner_id,
+                DocumentModel.content_hash == content_hash,
+            )
+        )
+
+        model = result.scalar_one_or_none()
+
+        if model is None:
+            return None
+
+        return _to_domain(model)
 
     async def list_for_owner(
         self, owner_id: uuid.UUID, *, limit: int, after_id: uuid.UUID | None

@@ -6,13 +6,16 @@ ports. No framework imports.
 
 from __future__ import annotations
 
+import hashlib
 from typing import TYPE_CHECKING
 
 from rag_platform.core.logging import get_logger
 from rag_platform.document_management.domain.entities import Document
 from rag_platform.document_management.domain.exceptions import (
     DocumentNotFoundError,
+    DuplicateDocumentError,
     EmptyFileError,
+    FileAlreadyExistsError,
     FileTooLargeError,
     UnsupportedContentTypeError,
 )
@@ -58,15 +61,33 @@ class DocumentService:
         if data.content_type not in self._allowed_types:
             raise UnsupportedContentTypeError()
 
+        content_hash = hashlib.sha256(data.data).hexdigest()
+
+        # Fast path: avoid creating a new document or uploading to MinIO
+        # when this owner has already uploaded identical content.
+        existing = await self._repo.get_by_owner_and_content_hash(
+            owner_id=data.owner_id,
+            content_hash=content_hash,
+        )
+
+        if existing is not None:
+            raise FileAlreadyExistsError()
+
         document = Document.create(
             owner_id=data.owner_id,
             filename=data.filename,
             content_type=data.content_type,
             size_bytes=len(data.data),
+            content_hash=content_hash,
         )
         # Persist metadata first so a storage failure leaves no orphan row.
         # On storage failure the transaction rolls back and the row is gone.
-        await self._repo.add(document)
+
+        try:
+            await self._repo.add(document)
+        except DuplicateDocumentError:
+            raise FileAlreadyExistsError() from None
+
         await self._storage.upload(document.storage_key, data.data, data.content_type)
         if self._enqueue_document_processing is not None:
             try:

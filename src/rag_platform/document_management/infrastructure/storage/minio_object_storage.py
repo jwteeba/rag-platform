@@ -13,6 +13,8 @@ import io
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
+from minio.error import S3Error
+
 from rag_platform.document_management.domain.ports import ObjectStoragePort
 
 if TYPE_CHECKING:
@@ -35,6 +37,21 @@ class MinioObjectStorage(ObjectStoragePort):
             )
 
         await asyncio.to_thread(_put)
+
+    async def exists(self, key: str) -> bool:
+        def _stat() -> bool:
+            try:
+                self._client.stat_object(
+                    self._bucket,
+                    key,
+                )
+                return True
+            except S3Error as exc:
+                if exc.code in {"NoSuchKey", "NoSuchObject", "NotFound"}:
+                    return False
+                raise
+
+        return await asyncio.to_thread(_stat)
 
     async def delete(self, key: str) -> None:
         await asyncio.to_thread(self._client.remove_object, self._bucket, key)

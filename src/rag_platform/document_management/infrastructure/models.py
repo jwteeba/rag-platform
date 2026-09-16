@@ -13,12 +13,19 @@ from rag_platform.core.db import Base, TimestampMixin, UUIDPrimaryKeyMixin
 class DocumentModel(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "documents"
 
+    UniqueConstraint(
+        "owner_id",
+        "content_hash",
+        name="uq_documents_owner_content_hash",
+    ),
+
     owner_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
     filename: Mapped[str] = mapped_column(String(500), nullable=False)
     content_type: Mapped[str] = mapped_column(String(255), nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    content_hash = mapped_column(String(600), nullable=False)
     storage_key: Mapped[str] = mapped_column(String(600), unique=True, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
 

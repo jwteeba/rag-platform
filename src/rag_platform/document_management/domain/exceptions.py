@@ -23,3 +23,13 @@ class UnsupportedContentTypeError(ValidationError):
 class EmptyFileError(ValidationError):
     message = "The uploaded file is empty."
     error_type = "empty-file"
+
+
+class FileAlreadyExistsError(NotFoundError):
+    message = "File already exists."
+    error_type = "file-exist"
+
+
+class DuplicateDocumentError(Exception):
+    message = "Duplicate document"
+    error_type = "duplicate-document"

@@ -76,7 +76,7 @@ test-minio-up:
 test-qdrant-up:
 	docker compose up -d qdrant
 	@echo "Waiting for dockerized qdrant to become healthy..."
-	@until docker compose exec -T qdrant python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:6333/healthz')" > /dev/null 2>&1; do sleep 1; done
+	@until curl -fsS http://localhost:6333/healthz > /dev/null 2>&1; do sleep 1; done
 	@echo "Dockerized qdrant is healthy."
 
 # Runs the suite against Docker Compose's postgres, redis, minio, and qdrant, always —
