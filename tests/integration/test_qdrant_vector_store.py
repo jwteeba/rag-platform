@@ -23,7 +23,7 @@ TEST_COLLECTION = "rag_platform_test"
 
 @pytest.fixture
 def qdrant_client() -> QdrantClient:
-    client = QdrantClient(":memory:")
+    client = QdrantClient(host=TEST_QDRANT_HOST, port=TEST_QDRANT_PORT)
     # Clean up any leftover collection from a previous run.
     existing = {c.name for c in client.get_collections().collections}
     if TEST_COLLECTION in existing:
