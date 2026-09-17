@@ -26,6 +26,7 @@ def build_qdrant_client(settings: Settings) -> QdrantClient:
     return QdrantClient(
         url=settings.qdrant_host,
         api_key=settings.qdrant_api_key or None,
+        https=settings.qdrant_https,  # explicit, not inferred from api_key
     )
 
 

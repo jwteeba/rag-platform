@@ -23,7 +23,7 @@ TEST_COLLECTION = "rag_platform_test"
 
 @pytest.fixture
 def qdrant_client() -> QdrantClient:
-    client = QdrantClient(host=TEST_QDRANT_HOST, port=TEST_QDRANT_PORT)
+    client = QdrantClient(":memory:")
     # Clean up any leftover collection from a previous run.
     existing = {c.name for c in client.get_collections().collections}
     if TEST_COLLECTION in existing:
@@ -39,6 +39,8 @@ def test_settings_qdrant() -> Settings:
         qdrant_collection_name=TEST_COLLECTION,
         embedding_dimensions=4,
         openai_api_key=None,
+        qdrant_api_key=None,
+        qdrant_https=False,
     )
 
 

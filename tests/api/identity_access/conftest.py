@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-import httpx
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
@@ -44,14 +44,14 @@ def register(
     email: str = "alice@example.com",
     password: str = "AlicePass123",
     full_name: str = "Alice Example",
-) -> httpx.Response:
+) -> httpx2.Response:
     return client.post(
         "/api/v1/auth/register",
         json={"email": email, "password": password, "full_name": full_name},
     )
 
 
-def login(client: TestClient, *, email: str, password: str) -> httpx.Response:
+def login(client: TestClient, *, email: str, password: str) -> httpx2.Response:
     return client.post("/api/v1/auth/login", data={"username": email, "password": password})
 
 

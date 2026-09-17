@@ -165,6 +165,7 @@ class Settings(BaseSettings):
     qdrant_port: int = Field(default=6333, ge=1, le=65535)
     qdrant_api_key: str | None = None
     qdrant_collection_name: str = "rag_platform"
+    qdrant_https: bool = True
 
     # -- Embeddings (Phase 8) ----------------------------------------------
     # Provider: "openai" or "local" (sentence-transformers).

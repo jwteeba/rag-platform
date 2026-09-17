@@ -37,6 +37,7 @@ torch = "2.5.1"
 transformers = "^5.0.0"
 sentence-transformers = "^6.0.1"
 starlette = "^1.6.0"
+anyio = "^4.15.1"
 
 [tool.poetry.extras]
 local-embeddings = ["torch", "transformers", "sentence-transformers"]
@@ -45,13 +46,13 @@ local-embeddings = ["torch", "transformers", "sentence-transformers"]
 pytest = "^8.3.3"
 pytest-asyncio = "^0.24.0"
 pytest-cov = "^5.0.0"
-httpx = "^0.27.2"
 ruff = "^0.9.0"
 black = "^24.8.0"
 mypy = "^1.11.2"
 pre-commit = "^3.8.0"
 moto = {extras = ["s3"], version = "^5.2.3"}
 flask-cors = "^6.0.5"
+httpx2 = "^2.13.0"
 
 [build-system]
 requires = ["poetry-core"]

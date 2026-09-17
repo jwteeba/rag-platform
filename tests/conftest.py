@@ -162,6 +162,8 @@ def test_settings(clean_database: None, clean_cache: None) -> Settings:
         minio_secure=False,
         qdrant_host=os.getenv("APP_TEST_QDRANT_HOST", "localhost"),
         qdrant_port=int(os.getenv("APP_TEST_QDRANT_PORT", "6333")),
+        qdrant_api_key=None,
+        qdrant_https=False,
         openai_api_key="sk-test",
     )
 
