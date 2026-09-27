@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 
+from rag_platform.core.config import Environment
+
 if TYPE_CHECKING:
     from rag_platform.core.config import Settings
 
@@ -23,6 +25,10 @@ def build_qdrant_client(settings: Settings) -> QdrantClient:
     - Local Qdrant without authentication.
     - Qdrant Cloud with API-key authentication.
     """
+
+    if settings.environment == Environment.TESTING:
+        return QdrantClient(":memory:")
+
     return QdrantClient(
         url=settings.qdrant_host,
         api_key=settings.qdrant_api_key or None,

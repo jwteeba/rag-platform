@@ -6,7 +6,6 @@ service; direct `pytest` runs fall back to localhost:6333.
 
 from __future__ import annotations
 
-import os
 import uuid
 
 import pytest
@@ -16,14 +15,12 @@ from qdrant_client.models import PointStruct
 from rag_platform.core.config import Settings
 from rag_platform.core.vector_store import ensure_collection_exists
 
-TEST_QDRANT_HOST = os.getenv("APP_TEST_QDRANT_HOST", "localhost")
-TEST_QDRANT_PORT = int(os.getenv("APP_TEST_QDRANT_PORT", "6333"))
 TEST_COLLECTION = "rag_platform_test"
 
 
 @pytest.fixture
 def qdrant_client() -> QdrantClient:
-    client = QdrantClient(host=TEST_QDRANT_HOST, port=TEST_QDRANT_PORT)
+    client = QdrantClient(":memory:")
     # Clean up any leftover collection from a previous run.
     existing = {c.name for c in client.get_collections().collections}
     if TEST_COLLECTION in existing:
@@ -34,8 +31,6 @@ def qdrant_client() -> QdrantClient:
 @pytest.fixture
 def test_settings_qdrant() -> Settings:
     return Settings(
-        qdrant_host=TEST_QDRANT_HOST,
-        qdrant_port=TEST_QDRANT_PORT,
         qdrant_collection_name=TEST_COLLECTION,
         embedding_dimensions=4,
         openai_api_key=None,

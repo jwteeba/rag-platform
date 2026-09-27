@@ -72,12 +72,15 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+        env:
+          APP_REDIS_URL: redis://redis:6379/0
 
       qdrant:
-        image: qdrant/qdrant:v1.19.0
+        image: qdrant/qdrant:latest
         ports:
-          - 6333:6333
-          - 6334:6334
+          - 16333:6333
+          - 16334:6334
+        options: --entrypoint /qdrant/qdrant
           
     steps:
       - uses: actions/checkout@v4
@@ -102,34 +105,27 @@ jobs:
       # MinIO is started manually. The container is named `minio` and
       # health-checked from the runner side before pytest runs.
       - name: Start MinIO
+
         run: |
+          # Clean up any stale container from a previous local `act` run
+          docker container prune -f 2>/dev/null || true
+
+          # Force remove any stale container holding port 9000
+          docker ps -q --filter "publish=9000" | xargs -r docker rm -f 2>/dev/null || true
+
           docker run -d --name minio \
             -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
-            quay.io/minio/minio:latest server /data
-
-          echo "Waiting for MinIO to be ready..."
-
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:9000/minio/health/live; then
-              echo "MinIO is ready."
-              exit 0
-            fi
-
-            echo "Waiting for MinIO... attempt $i/30"
-            sleep 2
-          done
-
-          echo "MinIO failed to become ready"
-          docker logs minio
-          exit 1
+            --health-cmd="curl -f http://localhost:9000/minio/health/ready || exit 1" \
+            --health-interval=5s \
+            --health-timeout=5s \
+            --health-retries=3 \
+            elestio/minio server /data
 
       - name: Create MinIO test bucket
         run: |
-          docker run --rm --network host \
-            -e MC_HOST_local=http://minioadmin:minioadmin@localhost:9000 \
-            quay.io/minio/mc:latest mb --ignore-existing local/rag-platform-test
+          docker exec -u 0 minio mkdir -p /data/rag-platform-test
 
       - name: Run tests with coverage
         env:

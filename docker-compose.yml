@@ -32,12 +32,10 @@ services:
       start_period: 5s
 
   minio:
-    image: quay.io/minio/minio:latest
+    image: elestio/minio
     command: server /data --console-address ":9001"
     ports:
-      # API on 9000 (remapped to 9000 on host), console on 9001.
-      # Use 9001 for host-side test access to avoid collisions with any
-      # locally-installed MinIO already on 9000.
+      # # MinIO S3 API on 9000, web console on 9001.
       - "9000:9000"
       - "9001:9001"
     environment:
@@ -59,7 +57,7 @@ services:
     volumes:
       - qdrant-data:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:6333/healthz')\""]
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
       interval: 5s
       timeout: 5s
       retries: 10
