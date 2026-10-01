@@ -175,6 +175,14 @@ class Settings(BaseSettings):
     embedding_batch_size: int = Field(default=32, ge=1)
     openai_api_key: str | None = None
 
+    # -- Retrieval / Semantic Search (Phase 9) -----------------------------
+    # Maximum value the caller may request for `limit`.
+    search_result_limit_max: int = Field(default=20, ge=1)
+    # Minimum cosine similarity score; results below this are dropped.
+    search_score_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    # Cross-encoder re-ranking — deferred, see ADR-0013.
+    retrieval_reranking_enabled: bool = False
+
     @model_validator(mode="after")
     def _require_openai_key_when_provider_is_openai(self) -> Settings:
         if self.embedding_provider == "openai" and not self.openai_api_key and self.is_production:

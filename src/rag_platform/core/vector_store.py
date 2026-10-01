@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams
+from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
 
 from rag_platform.core.config import Environment
 
@@ -56,3 +56,18 @@ def ensure_collection_exists(client: QdrantClient, settings: Settings) -> None:
                 distance=Distance.COSINE,
             ),
         )
+
+    # Ensure payload indexes exist for fields used in every search filter.
+    # `create_payload_index` is idempotent — safe to call on every startup
+    # whether the collection was just created or already existed.
+    collection_name = settings.qdrant_collection_name
+    client.create_payload_index(
+        collection_name=collection_name,
+        field_name="owner_id",
+        field_schema=PayloadSchemaType.KEYWORD,
+    )
+    client.create_payload_index(
+        collection_name=collection_name,
+        field_name="document_id",
+        field_schema=PayloadSchemaType.KEYWORD,
+    )

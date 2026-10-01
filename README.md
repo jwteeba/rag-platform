@@ -4,17 +4,18 @@ Enterprise-grade Retrieval-Augmented Generation service API. See
 [`docs/architecture.md`](docs/architecture.md) for the full architecture and
 [`docs/adr/`](docs/adr) for the history of architectural decisions.
 
-**Current phase: Phase 8 — Embeddings + Vector Storage.** Chunks produced by
-Phase 7 are now embedded and stored in Qdrant via the `indexing` bounded
-context. The `embed_chunks` Celery task is chained automatically after
-`process_document` completes. Two embedding adapters are provided:
-`OpenAIEmbeddingAdapter` (default, `APP_EMBEDDING_PROVIDER=openai`) and
-`SentenceTransformerEmbeddingAdapter` (local, `APP_EMBEDDING_PROVIDER=local`)
-— both implement the same `EmbeddingPort` and are swappable via config
-(see [ADR-0011](docs/adr/0011-embedding-provider.md)). Qdrant collection
-setup happens at startup alongside the MinIO bucket check
-(see [ADR-0012](docs/adr/0012-vector-store-qdrant-schema.md)).
-RAG retrieval and generation still don't exist.
+**Current phase: Phase 9 — Retrieval + Semantic Search.** The `retrieval`
+bounded context is now live. `POST /api/v1/search` accepts a natural-language
+query and returns the most semantically relevant chunks from the authenticated
+user's indexed documents, ranked by cosine similarity. Ownership is enforced
+via an `owner_id` pre-filter on every Qdrant query — a user can never retrieve
+chunks from another user's documents. An optional `document_ids` list scopes
+the search to specific documents. Results below `APP_SEARCH_SCORE_THRESHOLD`
+(default `0.7`) are dropped. Query embedding reuses Phase 8's `EmbeddingPort`
+(same adapter, same model) so scores are directly comparable to index-time
+scores. Cross-encoder re-ranking is flagged for a future phase
+(see [ADR-0013](docs/adr/0013-retrieval-strategy.md)).
+RAG generation still doesn't exist.
 See `docs/architecture.md` §Phases for what's still ahead.
 
 ## Requirements
@@ -74,6 +75,7 @@ The API is now available at `http://localhost:8000`:
 - `GET /api/v1/documents/{id}/download` — 307 redirect to a presigned download URL
 - `GET /api/v1/documents/{id}/download-url` — presigned download URL as JSON
 - `DELETE /api/v1/documents/{id}` — delete a document
+- `POST /api/v1/search` — semantic search: `{ "query": "...", "limit": 5, "document_ids": [...] }` → ranked list of matching chunks with source filename and relevance score
 
 To reach the admin-only endpoints on a fresh instance, set
 `APP_BOOTSTRAP_ADMIN_EMAIL` / `APP_BOOTSTRAP_ADMIN_PASSWORD` in `.env` before

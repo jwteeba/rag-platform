@@ -56,7 +56,8 @@ API  →  Application  →  Domain  ←  Infrastructure
 | Background jobs | **Celery + Redis**, structured context propagation, eager tests / worker in production | [0009](adr/0009-celery-background-tasks.md) |
 | Document processing | MIME-specific extraction plus token-window chunks persisted in Postgres | [0010](adr/0010-document-processing-chunking-strategy.md) |
 | Embedding provider | **OpenAI** (`text-embedding-3-small`) as default; `SentenceTransformerEmbeddingAdapter` as local swap-in via same `EmbeddingPort` | [0011](adr/0011-embedding-provider.md) |
-| Vector store schema | Single Qdrant collection, cosine distance, `owner_id` on every point for ownership-filtered search in Phase 11 | [0012](adr/0012-vector-store-qdrant-schema.md) |
+| Vector store schema | Single Qdrant collection, cosine distance, `owner_id` on every point for ownership-filtered search | [0012](adr/0012-vector-store-qdrant-schema.md) |
+| Retrieval strategy | Vector-first ANN search via Qdrant, `owner_id` pre-filter on every query, score threshold, re-ranking deferred | [0013](adr/0013-retrieval-strategy.md) |
 | IdentityAccess persistence | **In-memory adapters (Phase 2, ADR-0005)** still shipped and unit-tested; **Postgres adapters (Phase 3, ADR-0006)**, further wrapped in a **Redis cache-aside layer (Phase 4, ADR-0007)** for refresh-token lookups, are what the running application actually uses — all behind the same `UserRepositoryPort` / `RefreshTokenStorePort` | [0005](adr/0005-in-memory-persistence-for-phase-2-auth.md), [0006](adr/0006-postgres-persistence-identity-access.md), [0007](adr/0007-redis-caching-and-session-management.md) |
 | RBAC model | **Fixed two roles** (ADMIN, MEMBER); permissions (not roles) are what's checked everywhere, so dynamic roles later is a contained change | [0005](adr/0005-in-memory-persistence-for-phase-2-auth.md) |
 | Caching / "session management" scope | **Generic Redis infra + one concrete consumer** (refresh-token cache-aside), not speculative caching for embeddings/LLM/etc. that don't exist yet. "Session management" interpreted as literal user-facing session control (list/revoke sessions), since refresh tokens are the only session-like concept this app has | [0007](adr/0007-redis-caching-and-session-management.md) |
@@ -119,8 +120,13 @@ rag-platform/
 │   │                            # (Phase 4, wraps Postgres) repos, all
 │   │                            # implementing the same ports
 │   ├── di/                     # DI container wiring
-│   └── <other contexts>/       # document_management, indexing,
-│                               # retrieval, generation — later phases
+│   ├── retrieval/              # Phase 9: semantic search
+│   │   ├── api/v1/             # router (POST /search), schemas, dependencies
+│   │   ├── application/        # RetrievalService
+│   │   ├── domain/             # SearchResult, VectorSearchPort,
+│   │   │                       # ChunkMetadataRepositoryPort, exceptions
+│   │   └── infrastructure/     # QdrantVectorSearch, PostgresChunkMetadataRepository
+│   └── <other contexts>/       # generation — later phases
 └── tests/
     ├── unit/                   # no DB/Redis dependency — in-memory adapters only
     ├── integration/            # real Postgres + Redis (di container,
@@ -130,13 +136,9 @@ rag-platform/
     └── factories/
 ```
 
-Bounded-context packages not yet created (`document_management/`,
-`indexing/`, `retrieval/`, `generation/`) will each mirror the four-layer
-structure exactly when their phase arrives — `identity_access/` is the
-reference example of that structure in practice, now with three working
-Infrastructure adapters (in-memory, Postgres, Redis-cached-Postgres) for
-the same `RefreshTokenStorePort` as a concrete demonstration of why the
-port/adapter boundary is drawn where it is.
+Bounded-context packages not yet created (`generation/`) will each mirror
+the four-layer structure exactly when their phase arrives — `identity_access/`
+is the reference example of that structure in practice.
 
 ## Cross-cutting conventions
 
@@ -236,4 +238,10 @@ port/adapter boundary is drawn where it is.
   `embed_chunks` Celery task chained after `process_document`, Qdrant
   collection bootstrap, `embedding_id` / `embedding_status` on chunks.
   Complete.
-- **Phase 9+** — Not started.
+- **Phase 9** — Retrieval + Semantic Search: `retrieval/` bounded context,
+  `POST /api/v1/search` endpoint, `RetrievalService` (embed query →
+  Qdrant ANN search with `owner_id` pre-filter → hydrate from Postgres →
+  return ranked results), `QdrantVectorSearch`, `PostgresChunkMetadataRepository`,
+  score-threshold filtering, optional `document_ids` scoping, re-ranking
+  deferred (see ADR-0013). Complete.
+- **Phase 10+** — Not started.

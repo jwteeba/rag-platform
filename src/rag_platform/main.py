@@ -39,6 +39,7 @@ from rag_platform.document_management.api.v1.documents_router import router as d
 from rag_platform.identity_access.api.v1.auth_router import router as auth_router
 from rag_platform.identity_access.api.v1.users_router import router as users_router
 from rag_platform.platform.health.router import router as health_router
+from rag_platform.retrieval.api.v1.router import router as retrieval_router
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
@@ -118,6 +119,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router, prefix=settings.api_v1_prefix)
     app.include_router(users_router, prefix=settings.api_v1_prefix)
     app.include_router(documents_router, prefix=settings.api_v1_prefix)
+    app.include_router(retrieval_router, prefix=settings.api_v1_prefix)
 
     logger.info(
         "application_configured",
