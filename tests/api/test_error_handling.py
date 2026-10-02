@@ -8,6 +8,7 @@ domain endpoint that raises errors (none exist yet in Phase 1).
 from __future__ import annotations
 
 from collections.abc import Iterator
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,14 +16,35 @@ from fastapi.testclient import TestClient
 from rag_platform.core.config import Environment, LogFormat, Settings
 from rag_platform.core.exceptions import NotFoundError
 from rag_platform.main import create_app
+from tests.conftest import TEST_DATABASE_URL, TEST_MINIO_BUCKET, TEST_MINIO_ENDPOINT, TEST_REDIS_URL
 
 
 @pytest.fixture
-def client_with_error_route() -> Iterator[TestClient]:
+def mock_minio() -> Iterator[MagicMock]:
+    mock = MagicMock()
+    mock.bucket_exists.return_value = True
+    with patch("rag_platform.core.storage.build_minio_client", return_value=mock):
+        yield mock
+
+
+@pytest.fixture
+def client_with_error_route(
+    clean_database: None,
+    clean_cache: None,
+    mock_minio: MagicMock,
+) -> Iterator[TestClient]:
     settings = Settings(
         environment=Environment.TESTING,
         log_format=LogFormat.JSON,
         allowed_hosts=["*"],
+        database_url=TEST_DATABASE_URL,
+        redis_url=TEST_REDIS_URL,
+        minio_endpoint=TEST_MINIO_ENDPOINT,
+        minio_bucket=TEST_MINIO_BUCKET,
+        minio_access_key="minioadmin",
+        minio_secret_key="minioadmin",
+        minio_secure=False,
+        openai_api_key="sk-test",
     )
     app = create_app(settings=settings)
 
