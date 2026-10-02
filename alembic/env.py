@@ -37,6 +37,9 @@ from rag_platform.identity_access.infrastructure import (
 from rag_platform.document_management.infrastructure import (
     models as document_management_models,  # noqa: F401
 )
+from rag_platform.generation.infrastructure import (
+    models as generation_models,  # noqa: F401
+)
 
 config = context.config
 

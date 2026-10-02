@@ -4,17 +4,12 @@ Enterprise-grade Retrieval-Augmented Generation service API. See
 [`docs/architecture.md`](docs/architecture.md) for the full architecture and
 [`docs/adr/`](docs/adr) for the history of architectural decisions.
 
-**Current phase: Phase 9 — Retrieval + Semantic Search.** The `retrieval`
-bounded context is now live. `POST /api/v1/search` accepts a natural-language
-query and returns the most semantically relevant chunks from the authenticated
-user's indexed documents, ranked by cosine similarity. Ownership is enforced
-via an `owner_id` pre-filter on every Qdrant query — a user can never retrieve
-chunks from another user's documents. An optional `document_ids` list scopes
-the search to specific documents. Results below `APP_SEARCH_SCORE_THRESHOLD`
-(default `0.7`) are dropped. Query embedding reuses Phase 8's `EmbeddingPort`
-(same adapter, same model) so scores are directly comparable to index-time
-scores. Cross-encoder re-ranking is flagged for a future phase
-(see [ADR-0013](docs/adr/0013-retrieval-strategy.md)).
+**Current phase: Phase 10: Prompt Engineering + Context Assembly.** Phase 10
+establishes the crucial bridge between retrieval (Phase 9) and generation
+(Phase 11). It takes the top-ranked text chunks from the retrieval engine,
+filters and fits them within a strict model token budget, applies source
+attribution, renders dynamic prompt templates, and pre-calculates accurate
+token counts using tiktoken.
 RAG generation still doesn't exist.
 See `docs/architecture.md` §Phases for what's still ahead.
 
@@ -76,6 +71,18 @@ The API is now available at `http://localhost:8000`:
 - `GET /api/v1/documents/{id}/download-url` — presigned download URL as JSON
 - `DELETE /api/v1/documents/{id}` — delete a document
 - `POST /api/v1/search` — semantic search: `{ "query": "...", "limit": 5, "document_ids": [...] }` → ranked list of matching chunks with source filename and relevance score
+- `GET /api/v1/prompt-templates` — List all prompt templates
+- `POST /api/v1/prompt-templates` — Create a prompt template
+- `GET /api/v1/prompt-templates/{template_id}` — Get a prompt template by id
+- `PATCH /api/v1/prompt-templates/{template_id}` — Update a prompt template
+- `DELETE /api/v1/prompt-templates/{template_id}` — Delete a prompt template
+- `POST /api/v1/prompt-templates/assemble` — Assemble a prompt from ranked retrieval chunks
+- `GET /api/v1/prompt-templates` — List all prompt templates
+- `POST /api/v1/prompt-templates` — Create a prompt template
+- `GET /api/v1/prompt-templates/{template_id}` — Get a prompt template by id
+- `PATCH /api/v1/prompt-templates/{template_id}` — Update a prompt template
+- `DELETE /api/v1/prompt-templates/{template_id}` — Delete a prompt template
+- `POST /api/v1/prompt-templates/assemble` — Assemble a prompt from ranked retrieval chunks
 
 To reach the admin-only endpoints on a fresh instance, set
 `APP_BOOTSTRAP_ADMIN_EMAIL` / `APP_BOOTSTRAP_ADMIN_PASSWORD` in `.env` before
@@ -195,7 +202,9 @@ curl -i http://localhost:8000/api/v1/users/me   # no token → 401
 
 ## Project layout
 
-See `docs/architecture.md` for the full rationale. Summary:
+See `docs/architecture.md` for the full rationale. 
+
+API Documentation:
 
 ![API Docs](images/rag_api_doc.png)
 

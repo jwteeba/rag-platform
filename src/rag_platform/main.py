@@ -32,10 +32,12 @@ from rag_platform.core.middleware.request_id import RequestIDMiddleware
 from rag_platform.di.containers import (
     build_container,
     ensure_bootstrap_admin,
+    ensure_default_prompt_templates,
     ensure_storage_bucket,
     ensure_vector_collection,
 )
 from rag_platform.document_management.api.v1.documents_router import router as documents_router
+from rag_platform.generation.api.v1.router import router as generation_router
 from rag_platform.identity_access.api.v1.auth_router import router as auth_router
 from rag_platform.identity_access.api.v1.users_router import router as users_router
 from rag_platform.platform.health.router import router as health_router
@@ -57,6 +59,7 @@ def _build_lifespan(
         await ensure_storage_bucket(app.state.container, settings)
         await ensure_vector_collection(app.state.container, settings)
         await ensure_bootstrap_admin(app.state.container, settings)
+        await ensure_default_prompt_templates(app.state.container, settings)
         logger.info("application_startup_complete")
         yield
         await app.state.container.engine.dispose()
@@ -120,6 +123,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(users_router, prefix=settings.api_v1_prefix)
     app.include_router(documents_router, prefix=settings.api_v1_prefix)
     app.include_router(retrieval_router, prefix=settings.api_v1_prefix)
+    app.include_router(generation_router, prefix=settings.api_v1_prefix)
 
     logger.info(
         "application_configured",

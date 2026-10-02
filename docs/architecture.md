@@ -58,6 +58,7 @@ API  →  Application  →  Domain  ←  Infrastructure
 | Embedding provider | **OpenAI** (`text-embedding-3-small`) as default; `SentenceTransformerEmbeddingAdapter` as local swap-in via same `EmbeddingPort` | [0011](adr/0011-embedding-provider.md) |
 | Vector store schema | Single Qdrant collection, cosine distance, `owner_id` on every point for ownership-filtered search | [0012](adr/0012-vector-store-qdrant-schema.md) |
 | Retrieval strategy | Vector-first ANN search via Qdrant, `owner_id` pre-filter on every query, score threshold, re-ranking deferred | [0013](adr/0013-retrieval-strategy.md) |
+| Prompt assembly | tiktoken token counting, greedy chunk fitting (drop lowest-score first), inline source attribution, Postgres-backed templates seeded at startup | [0014](adr/0014-prompt-assembly-strategy.md) |
 | IdentityAccess persistence | **In-memory adapters (Phase 2, ADR-0005)** still shipped and unit-tested; **Postgres adapters (Phase 3, ADR-0006)**, further wrapped in a **Redis cache-aside layer (Phase 4, ADR-0007)** for refresh-token lookups, are what the running application actually uses — all behind the same `UserRepositoryPort` / `RefreshTokenStorePort` | [0005](adr/0005-in-memory-persistence-for-phase-2-auth.md), [0006](adr/0006-postgres-persistence-identity-access.md), [0007](adr/0007-redis-caching-and-session-management.md) |
 | RBAC model | **Fixed two roles** (ADMIN, MEMBER); permissions (not roles) are what's checked everywhere, so dynamic roles later is a contained change | [0005](adr/0005-in-memory-persistence-for-phase-2-auth.md) |
 | Caching / "session management" scope | **Generic Redis infra + one concrete consumer** (refresh-token cache-aside), not speculative caching for embeddings/LLM/etc. that don't exist yet. "Session management" interpreted as literal user-facing session control (list/revoke sessions), since refresh tokens are the only session-like concept this app has | [0007](adr/0007-redis-caching-and-session-management.md) |
@@ -126,7 +127,12 @@ rag-platform/
 │   │   ├── domain/             # SearchResult, VectorSearchPort,
 │   │   │                       # ChunkMetadataRepositoryPort, exceptions
 │   │   └── infrastructure/     # QdrantVectorSearch, PostgresChunkMetadataRepository
-│   └── <other contexts>/       # generation — later phases
+│   ├── generation/             # Phase 10: prompt engineering + context assembly
+│   │   ├── api/v1/             # router (CRUD + POST /assemble), schemas, dependencies
+│   │   ├── application/        # PromptAssemblyService
+│   │   ├── domain/             # PromptTemplate, AssembledPrompt, ports, exceptions
+│   │   └── infrastructure/     # PostgresPromptTemplateRepository, TiktokenCounter
+│   └── <other contexts>/       # generation (Phase 11 LLM calls) — later phases
 └── tests/
     ├── unit/                   # no DB/Redis dependency — in-memory adapters only
     ├── integration/            # real Postgres + Redis (di container,
@@ -244,4 +250,12 @@ is the reference example of that structure in practice.
   return ranked results), `QdrantVectorSearch`, `PostgresChunkMetadataRepository`,
   score-threshold filtering, optional `document_ids` scoping, re-ranking
   deferred (see ADR-0013). Complete.
-- **Phase 10+** — Not started.
+- **Phase 10** — Prompt Engineering + Context Assembly: `generation/` bounded
+  context, `PromptTemplate` entity + Postgres-backed CRUD (admin-only),
+  two default templates seeded at startup (`general-qa`, `summarization`),
+  `PromptAssemblyService` (greedy chunk fitting within token budget, inline
+  source attribution, template rendering), `TiktokenCounter` for accurate
+  pre-flight token counts, `POST /api/v1/prompt-templates/assemble` endpoint
+  (see ADR-0014). Complete.
+- **Phase 11+** — Not started.
+

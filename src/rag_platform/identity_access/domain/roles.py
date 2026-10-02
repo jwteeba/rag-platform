@@ -39,10 +39,17 @@ class Permission(StrEnum):
 
     USERS_READ = "users:read"
     USERS_MANAGE = "users:manage"
+    PROMPT_TEMPLATES_MANAGE = "prompt_templates:manage"
 
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
-    Role.ADMIN: frozenset({Permission.USERS_READ, Permission.USERS_MANAGE}),
+    Role.ADMIN: frozenset(
+        {
+            Permission.USERS_READ,
+            Permission.USERS_MANAGE,
+            Permission.PROMPT_TEMPLATES_MANAGE,
+        }
+    ),
     Role.MEMBER: frozenset(),
 }
 

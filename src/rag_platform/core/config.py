@@ -183,6 +183,14 @@ class Settings(BaseSettings):
     # Cross-encoder re-ranking — deferred, see ADR-0013.
     retrieval_reranking_enabled: bool = False
 
+    # -- Prompt Engineering / Context Assembly (Phase 10) ------------------
+    # Maximum tokens to fill with retrieved context chunks.
+    max_context_tokens: int = Field(default=6000, ge=1)
+    # Name of the default PromptTemplate used when no template_id is supplied.
+    default_prompt_template_name: str = "general-qa"
+    # tiktoken model name used for accurate token counting.
+    tiktoken_model: str = "gpt-4o"
+
     @model_validator(mode="after")
     def _require_openai_key_when_provider_is_openai(self) -> Settings:
         if self.embedding_provider == "openai" and not self.openai_api_key and self.is_production:

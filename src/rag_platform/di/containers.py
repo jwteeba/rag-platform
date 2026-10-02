@@ -182,3 +182,48 @@ async def ensure_bootstrap_admin(container: Container, settings: Settings) -> No
             role=Role.ADMIN,
         )
         await session.commit()
+
+
+async def ensure_default_prompt_templates(container: Container, settings: Settings) -> None:
+    """Seed default prompt templates at startup if they don't already exist.
+
+    Idempotent — checks by name before inserting. Seeds two templates:
+    - "general-qa": general question-answering over retrieved context.
+    - "summarization": summarize the retrieved context.
+    """
+    from rag_platform.generation.domain.entities import PromptTemplate
+    from rag_platform.generation.infrastructure.repositories.postgres_prompt_template_repository import (  # noqa: E501
+        PostgresPromptTemplateRepository,
+    )
+
+    defaults = [
+        PromptTemplate.create(
+            name="general-qa",
+            system_prompt=(
+                "You are a helpful assistant. Answer the user's question using only the "
+                "provided context. If the context does not contain enough information to "
+                "answer, say so. Cite the source document and chunk index for each claim."
+            ),
+            user_template=("Context:\n{context}\n\nQuestion: {query}\n\nAnswer:"),
+            model_target="gpt-4o",
+        ),
+        PromptTemplate.create(
+            name="summarization",
+            system_prompt=(
+                "You are a precise summarization assistant. Summarize the provided context "
+                "concisely and accurately. Include source attribution for key points."
+            ),
+            user_template=(
+                "Context:\n{context}\n\nSummarize the above context in response to: {query}\n\nSummary:"  # noqa: E501
+            ),
+            model_target="gpt-4o",
+        ),
+    ]
+
+    async with container.session_factory() as session:
+        repo = PostgresPromptTemplateRepository(session)
+        for template in defaults:
+            existing = await repo.get_by_name(template.name)
+            if existing is None:
+                await repo.add(template)
+        await session.commit()

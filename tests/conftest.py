@@ -55,6 +55,9 @@ from rag_platform.core.db import Base
 from rag_platform.document_management.infrastructure import (
     models as _document_management_models,  # noqa: F401
 )
+from rag_platform.generation.infrastructure import (
+    models as _generation_models,  # noqa: F401
+)
 from rag_platform.identity_access.infrastructure import (
     models as _identity_access_models,  # noqa: F401
 )
@@ -115,7 +118,9 @@ async def clean_database() -> AsyncIterator[None]:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
         await connection.execute(
-            text("TRUNCATE TABLE documents, refresh_tokens, users RESTART IDENTITY CASCADE")
+            text(
+                "TRUNCATE TABLE prompt_templates, documents, refresh_tokens, users RESTART IDENTITY CASCADE"  # noqa: E501
+            )
         )
     await engine.dispose()
     yield
