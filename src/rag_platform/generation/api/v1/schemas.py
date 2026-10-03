@@ -8,6 +8,15 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
+class ConversationStartRequest(BaseModel):
+    query: str = Field(..., min_length=1)
+    limit: int = Field(default=5, ge=1, le=20)
+
+
+class ConversationMessageRequest(ConversationStartRequest):
+    pass
+
+
 class PromptTemplateCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     system_prompt: str = Field(..., min_length=1)

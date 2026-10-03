@@ -37,6 +37,7 @@ from rag_platform.di.containers import (
     ensure_vector_collection,
 )
 from rag_platform.document_management.api.v1.documents_router import router as documents_router
+from rag_platform.generation.api.v1.conversation_router import router as conversation_router
 from rag_platform.generation.api.v1.router import router as generation_router
 from rag_platform.identity_access.api.v1.auth_router import router as auth_router
 from rag_platform.identity_access.api.v1.users_router import router as users_router
@@ -124,6 +125,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(documents_router, prefix=settings.api_v1_prefix)
     app.include_router(retrieval_router, prefix=settings.api_v1_prefix)
     app.include_router(generation_router, prefix=settings.api_v1_prefix)
+    app.include_router(conversation_router, prefix=settings.api_v1_prefix)
 
     logger.info(
         "application_configured",

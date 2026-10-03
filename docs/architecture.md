@@ -177,6 +177,10 @@ is the reference example of that structure in practice.
   genuinely stateless singletons (password hasher, token service, Redis
   client, `CacheService`). See ADR-0006 for why this changed from Phase 2's
   simpler singleton-service container.
+- **Postgres schema**: all application ORM tables use the `rag_platform`
+  schema through shared SQLAlchemy metadata. Alembic keeps its version table
+  in `public`; the schema migration moves existing application tables and
+  their constraints into `rag_platform`.
 - **Caching**: Redis, via `core/cache.py`'s `CacheService` — a generic
   cache-aside helper (JSON-serializable values, mandatory TTL). Unlike the
   per-request DB session, the Redis client *is* a safe process-wide
@@ -257,5 +261,6 @@ is the reference example of that structure in practice.
   source attribution, template rendering), `TiktokenCounter` for accurate
   pre-flight token counts, `POST /api/v1/prompt-templates/assemble` endpoint
   (see ADR-0014). Complete.
-- **Phase 11+** — Not started.
-
+- **Phase 11** — LLM Integration + Answer Generation: provider port and OpenAI/Anthropic
+  adapters, owner-scoped conversation/message persistence, retrieval + prompt orchestration,
+  completion and SSE APIs, and history-aware context budgeting (ADRs 0015 and 0016).

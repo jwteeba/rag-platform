@@ -54,6 +54,7 @@ class AssembledPrompt:
     context_chunks: list[tuple[str, int, str]]  # (filename, chunk_index, content)
     user_query: str
     token_count: int
+    rendered_user_prompt: str = ""
 
     @property
     def rendered_context(self) -> str:
@@ -62,3 +63,40 @@ class AssembledPrompt:
         for filename, chunk_index, content in self.context_chunks:
             parts.append(f"[Source: {filename}, chunk {chunk_index}]\n{content}")
         return "\n\n".join(parts)
+
+
+@dataclass(slots=True)
+class Conversation:
+    id: uuid.UUID
+    owner_id: uuid.UUID
+    title: str
+    created_at: datetime
+
+    @classmethod
+    def create(cls, owner_id: uuid.UUID, title: str) -> Conversation:
+        return cls(generate_uuid7(), owner_id, title[:200], datetime.now(UTC))
+
+
+@dataclass(slots=True)
+class Message:
+    id: uuid.UUID
+    conversation_id: uuid.UUID
+    role: str
+    content: str
+    token_count: int
+    created_at: datetime
+
+    @classmethod
+    def create(
+        cls, conversation_id: uuid.UUID, role: str, content: str, token_count: int = 0
+    ) -> Message:
+        return cls(generate_uuid7(), conversation_id, role, content, token_count, datetime.now(UTC))
+
+
+@dataclass(slots=True)
+class GenerationResult:
+    answer: str
+    source_documents: list[dict[str, str | int]]
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int

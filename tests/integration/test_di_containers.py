@@ -9,8 +9,8 @@ keyspace per test.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
 
 from rag_platform.core.config import Environment, LogFormat, Settings
 from rag_platform.di.containers import Container, build_container, ensure_bootstrap_admin
@@ -19,9 +19,6 @@ from rag_platform.identity_access.infrastructure.repositories.postgres_user_repo
     PostgresUserRepository,
 )
 from tests.conftest import TEST_DATABASE_URL, TEST_REDIS_URL
-
-if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
 
 
 def _settings(**overrides: object) -> Settings:
@@ -37,7 +34,7 @@ def _settings(**overrides: object) -> Settings:
 
 
 @asynccontextmanager
-async def _built_container(settings: Settings) -> AsyncIterator[Container]:
+async def _built_container(settings: Settings) -> AsyncGenerator[Container, None]:
     """Build a container and guarantee both its engine and Redis client
     are cleaned up afterward, regardless of what the test does with it."""
     container = build_container(settings)
@@ -122,7 +119,9 @@ class TestEnsureBootstrapAdmin:
                 assert len(admins) == 1
 
     async def test_only_email_set_is_a_no_op(self, clean_database: None, clean_cache: None) -> None:
-        settings = _settings(bootstrap_admin_email="admin@example.com")
+        settings = _settings(
+            bootstrap_admin_email="admin@example.com", bootstrap_admin_password=None
+        )
         async with _built_container(settings) as container:
             await ensure_bootstrap_admin(container, settings)
 

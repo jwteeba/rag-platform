@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from rag_platform.core.exceptions import NotFoundError, ValidationError
+from rag_platform.core.exceptions import ApplicationError, NotFoundError, ValidationError
 
 
 class TemplateNotFoundError(NotFoundError):
@@ -18,3 +18,17 @@ class TemplateRenderError(ValidationError):
 class ContextWindowExceededError(ValidationError):
     message = "The assembled context exceeds the maximum context window."
     error_type = "context-window-exceeded"
+
+
+class LLMUnavailableError(ApplicationError):
+    message = "The language model provider is unavailable."
+    error_type = "llm-unavailable"
+
+
+class ConversationNotFoundError(NotFoundError):
+    message = "Conversation not found."
+    error_type = "conversation-not-found"
+
+
+class TokenBudgetExceededError(ContextWindowExceededError):
+    pass

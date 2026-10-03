@@ -51,12 +51,25 @@ config.set_main_option("sqlalchemy.url", get_settings().database_url)
 target_metadata = Base.metadata
 
 
+def include_name(name: str | None, type_: str, parent_names: dict[str, str]) -> bool:
+    """Limit autogeneration to application tables in our managed schema.
+
+    Supabase owns additional schemas (for example `auth` and `storage`) that
+    must never be compared against or altered by this application's metadata.
+    """
+    if type_ == "schema":
+        return name == "rag_platform"
+    return parent_names.get("schema_name") == "rag_platform"
+
+
 def run_migrations_offline() -> None:
     """Generate SQL scripts without a live DB connection (`alembic upgrade --sql`)."""
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
+        include_schemas=True,
+        include_name=include_name,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -65,7 +78,12 @@ def run_migrations_offline() -> None:
 
 
 def _run_migrations_sync(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_schemas=True,
+        include_name=include_name,
+    )
     with context.begin_transaction():
         context.run_migrations()
 

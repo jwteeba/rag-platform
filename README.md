@@ -4,14 +4,14 @@ Enterprise-grade Retrieval-Augmented Generation service API. See
 [`docs/architecture.md`](docs/architecture.md) for the full architecture and
 [`docs/adr/`](docs/adr) for the history of architectural decisions.
 
-**Current phase: Phase 10: Prompt Engineering + Context Assembly.** Phase 10
+**Current phase: Phase 11: LLM Integration + Answer Generation.** Phase 11
 establishes the crucial bridge between retrieval (Phase 9) and generation
 (Phase 11). It takes the top-ranked text chunks from the retrieval engine,
 filters and fits them within a strict model token budget, applies source
 attribution, renders dynamic prompt templates, and pre-calculates accurate
 token counts using tiktoken.
-RAG generation still doesn't exist.
-See `docs/architecture.md` §Phases for what's still ahead.
+It adds OpenAI/Anthropic answer generation, streaming, and owner-scoped conversation history.
+See `docs/architecture.md` §Phases for the current phase status.
 
 ## Requirements
 
@@ -77,6 +77,11 @@ The API is now available at `http://localhost:8000`:
 - `PATCH /api/v1/prompt-templates/{template_id}` — Update a prompt template
 - `DELETE /api/v1/prompt-templates/{template_id}` — Delete a prompt template
 - `POST /api/v1/prompt-templates/assemble` — Assemble a prompt from ranked retrieval chunks
+- `POST /api/v1/conversations` — start a retrieved-context conversation
+- `POST /api/v1/conversations/{id}/messages` — continue a conversation
+- `POST /api/v1/conversations/{id}/messages/stream` — stream answer chunks as SSE
+- `GET /api/v1/conversations` and `/api/v1/conversations/{id}` — list or read owned conversations
+- `GET /api/v1/conversations/{id}/messages` / `DELETE /api/v1/conversations/{id}` — read history or delete a conversation
 - `GET /api/v1/prompt-templates` — List all prompt templates
 - `POST /api/v1/prompt-templates` — Create a prompt template
 - `GET /api/v1/prompt-templates/{template_id}` — Get a prompt template by id
@@ -102,6 +107,11 @@ directory. Run `make db-upgrade` once Postgres is up if this is a fresh
 volume.
 
 ## Database migrations
+
+Application tables live in the PostgreSQL `rag_platform` schema. Apply the
+latest migration with `make db-upgrade`; it creates the schema if needed and
+moves existing application tables out of `public` while preserving their
+data. Alembic's `alembic_version` table remains in `public`.
 
 ```bash
 make db-upgrade              # apply all pending migrations

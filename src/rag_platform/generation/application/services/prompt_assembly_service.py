@@ -85,4 +85,5 @@ class PromptAssemblyService:
             context_chunks=fitted,
             user_query=query,
             token_count=total_tokens,
+            rendered_user_prompt=rendered_user,
         )

@@ -17,7 +17,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, func
+from sqlalchemy import DateTime, MetaData, func
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.pool import NullPool
@@ -30,8 +30,13 @@ if TYPE_CHECKING:
     from rag_platform.core.config import Settings
 
 
+DATABASE_SCHEMA = "rag_platform"
+
+
 class Base(DeclarativeBase):
-    """Declarative base every ORM model in every bounded context inherits from."""
+    """Declarative base for models in the dedicated application schema."""
+
+    metadata = MetaData(schema=DATABASE_SCHEMA)
 
 
 class UUIDPrimaryKeyMixin:

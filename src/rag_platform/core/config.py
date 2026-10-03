@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -191,12 +191,19 @@ class Settings(BaseSettings):
     # tiktoken model name used for accurate token counting.
     tiktoken_model: str = "gpt-4o"
 
+    # -- Answer generation / conversations (Phase 11) -----------------------
+    llm_provider: Literal["openai", "anthropic"] = "openai"
+    llm_model: str = "gpt-4o"
+    llm_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
+    llm_max_tokens: int = Field(default=1000, ge=1)
+    anthropic_api_key: str | None = None
+    max_conversation_history_messages: int = Field(default=10, ge=0)
+
     @model_validator(mode="after")
     def _require_openai_key_when_provider_is_openai(self) -> Settings:
         if self.embedding_provider == "openai" and not self.openai_api_key and self.is_production:
             raise ValueError(
-                "APP_OPENAI_API_KEY must be set when APP_EMBEDDING_PROVIDER=openai "
-                "in production."
+                "APP_OPENAI_API_KEY must be set when APP_EMBEDDING_PROVIDER=openai in production."
             )
         return self
 

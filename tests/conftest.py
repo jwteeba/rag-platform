@@ -116,10 +116,12 @@ async def clean_database() -> AsyncIterator[None]:
     """
     engine = create_async_engine(TEST_DATABASE_URL)
     async with engine.begin() as connection:
+        await connection.execute(text("CREATE SCHEMA IF NOT EXISTS rag_platform"))
         await connection.run_sync(Base.metadata.create_all)
         await connection.execute(
             text(
-                "TRUNCATE TABLE prompt_templates, documents, refresh_tokens, users RESTART IDENTITY CASCADE"  # noqa: E501
+                "TRUNCATE TABLE rag_platform.prompt_templates, rag_platform.documents, "
+                "rag_platform.refresh_tokens, rag_platform.users RESTART IDENTITY CASCADE"
             )
         )
     await engine.dispose()
