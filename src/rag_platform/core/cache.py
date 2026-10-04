@@ -13,12 +13,19 @@ life of the process (see `di/containers.py`).
 from __future__ import annotations
 
 import json
+import time
 from typing import TYPE_CHECKING, Any
 
+from redis import ConnectionPool as SyncConnectionPool
+from redis import Redis as SyncRedis
 from redis.asyncio import ConnectionPool, Redis
+
+from rag_platform.core.logging import get_logger
 
 if TYPE_CHECKING:
     from rag_platform.core.config import Settings
+
+logger = get_logger(__name__)
 
 
 def build_redis_client(settings: Settings) -> Redis:
@@ -29,6 +36,30 @@ def build_redis_client(settings: Settings) -> Redis:
         decode_responses=True,
     )
     return Redis(connection_pool=pool)
+
+
+def build_sync_redis_client(settings: Settings) -> SyncRedis:
+    """Build the Redis client used by synchronous embedding/vector adapters."""
+    pool = SyncConnectionPool.from_url(
+        settings.redis_url,
+        max_connections=settings.redis_max_connections,
+        decode_responses=True,
+    )
+    return SyncRedis(connection_pool=pool)
+
+
+def log_cache_access(client: SyncRedis, *, layer: str, hit: bool, started_at: float) -> None:
+    """Record one cache lookup without letting telemetry affect the request."""
+    event = "cache_hit" if hit else "cache_miss"
+    try:
+        client.incr(f"rag:cache:metrics:{layer}:{'hits' if hit else 'misses'}")
+    except Exception:
+        logger.warning("cache_metrics_write_failed", cache_layer=layer)
+    logger.info(
+        event,
+        cache_layer=layer,
+        latency_ms=round((time.perf_counter() - started_at) * 1000, 3),
+    )
 
 
 class CacheService:
@@ -65,3 +96,16 @@ class CacheService:
         """Remove one or more keys from the cache. Missing keys are a no-op."""
         if keys:
             await self._client.delete(*keys)
+
+    async def delete_matching(self, pattern: str) -> int:
+        """Delete keys matching a pattern in bounded batches; return count."""
+        batch: list[str] = []
+        deleted = 0
+        async for key in self._client.scan_iter(match=pattern, count=500):
+            batch.append(key)
+            if len(batch) == 500:
+                deleted += int(await self._client.delete(*batch))
+                batch.clear()
+        if batch:
+            deleted += int(await self._client.delete(*batch))
+        return deleted

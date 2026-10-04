@@ -9,7 +9,12 @@ if TYPE_CHECKING:
     import uuid
     from collections.abc import AsyncIterator
 
-    from rag_platform.generation.domain.entities import Conversation, Message, PromptTemplate
+    from rag_platform.generation.domain.entities import (
+        Conversation,
+        GenerationResult,
+        Message,
+        PromptTemplate,
+    )
 
 
 @runtime_checkable
@@ -59,3 +64,24 @@ class MessageRepositoryPort(Protocol):
         self, conversation_id: uuid.UUID, limit: int
     ) -> builtins.list[Message]: ...
     async def list_all(self, conversation_id: uuid.UUID) -> builtins.list[Message]: ...
+
+
+@runtime_checkable
+class SemanticResponseCachePort(Protocol):
+    def lookup(
+        self,
+        owner_id: uuid.UUID,
+        query_vector: list[float],
+        *,
+        namespace: str,
+        similarity_threshold: float,
+    ) -> GenerationResult | None: ...
+
+    def store(
+        self,
+        owner_id: uuid.UUID,
+        query_vector: list[float],
+        result: GenerationResult,
+        *,
+        namespace: str,
+    ) -> None: ...

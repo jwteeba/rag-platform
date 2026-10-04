@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -25,6 +26,10 @@ def get_document_service(
 ) -> DocumentService:
     container = request.app.state.container
     settings = request.app.state.settings
+
+    async def invalidate_retrieval_cache(owner_id: uuid.UUID) -> None:
+        await container.cache_service.delete_matching(f"rag:cache:retrieval:{owner_id}:*")
+
     return DocumentService(
         repository=PostgresDocumentRepository(session),
         storage=MinioObjectStorage(container.minio_client, settings.minio_bucket),
@@ -35,4 +40,5 @@ def get_document_service(
         # Full API tests use the real database transaction but do not need a
         # worker; task-specific tests exercise eager execution explicitly.
         enqueue_document_processing=(None if settings.is_testing else enqueue_document_processing),
+        invalidate_retrieval_cache=invalidate_retrieval_cache,
     )

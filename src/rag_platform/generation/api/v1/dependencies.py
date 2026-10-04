@@ -12,6 +12,9 @@ from rag_platform.generation.application.services.prompt_assembly_service import
     PromptAssemblyService,
 )
 from rag_platform.generation.domain.ports import LLMPort
+from rag_platform.generation.infrastructure.cache.semantic_response_cache import (
+    SemanticResponseCache,
+)
 from rag_platform.generation.infrastructure.llm.anthropic_llm_adapter import AnthropicLLMAdapter
 from rag_platform.generation.infrastructure.llm.openai_llm_adapter import OpenAILLMAdapter
 from rag_platform.generation.infrastructure.repositories.postgres_conversation_repository import (
@@ -79,4 +82,17 @@ def get_generation_service(
         max_tokens=settings.llm_max_tokens,
         max_context_tokens=settings.max_context_tokens,
         history_limit=settings.max_conversation_history_messages,
+        semantic_cache=SemanticResponseCache(
+            request.app.state.container.cache_sync_client,
+            ttl_seconds=settings.llm_cache_ttl_seconds,
+            enabled=settings.llm_cache_enabled,
+        ),
+        cache_namespace=(
+            f"{settings.llm_provider}:{settings.llm_model}:"
+            f"{settings.llm_temperature}:{settings.llm_max_tokens}:"
+            f"{settings.embedding_provider}:{settings.embedding_model}:"
+            f"{settings.default_prompt_template_name}:{settings.max_context_tokens}:"
+            f"{settings.search_score_threshold}"
+        ),
+        cache_similarity_threshold=settings.llm_cache_similarity_threshold,
     )

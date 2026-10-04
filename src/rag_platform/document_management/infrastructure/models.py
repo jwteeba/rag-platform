@@ -13,11 +13,13 @@ from rag_platform.core.db import Base, TimestampMixin, UUIDPrimaryKeyMixin
 class DocumentModel(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "documents"
 
-    UniqueConstraint(
-        "owner_id",
-        "content_hash",
-        name="uq_documents_owner_content_hash",
-    ),
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id",
+            "content_hash",
+            name="uq_documents_owner_content_hash",
+        ),
+    )
 
     owner_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False

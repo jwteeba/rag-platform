@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from qdrant_client.models import PointStruct
 
 import rag_platform.identity_access.infrastructure.models  # noqa: F401
+from rag_platform.core.cache import build_sync_redis_client
 from rag_platform.core.celery import celery_app
 from rag_platform.core.config import get_settings
 from rag_platform.core.db import build_engine, build_session_factory
@@ -25,31 +26,48 @@ from rag_platform.document_management.infrastructure.repositories.postgres_docum
 if TYPE_CHECKING:
     from celery import Task
 
+    from rag_platform.indexing.domain.ports import EmbeddingPort
+
 logger = get_logger(__name__)
 
 
-def _build_embedding_adapter(settings: object) -> object:
+def _build_embedding_adapter(settings: object, cache_client: object) -> object:
     """Instantiate the configured embedding adapter."""
+    from redis import Redis
+
     from rag_platform.core.config import Settings
+    from rag_platform.indexing.infrastructure.cache.cached_embedding_adapter import (
+        CachedEmbeddingAdapter,
+    )
 
     assert isinstance(settings, Settings)
+    assert isinstance(cache_client, Redis)
     if settings.embedding_provider == "local":
         from rag_platform.indexing.infrastructure.embedding.sentence_transformer_adapter import (
             SentenceTransformerEmbeddingAdapter,
         )
 
-        return SentenceTransformerEmbeddingAdapter(settings)
-    from rag_platform.indexing.infrastructure.embedding.openai_adapter import (
-        OpenAIEmbeddingAdapter,
-    )
+        base_adapter: EmbeddingPort = SentenceTransformerEmbeddingAdapter(settings)
+    else:
+        from rag_platform.indexing.infrastructure.embedding.openai_adapter import (
+            OpenAIEmbeddingAdapter,
+        )
 
-    return OpenAIEmbeddingAdapter(settings)
+        base_adapter = OpenAIEmbeddingAdapter(settings)
+    return CachedEmbeddingAdapter(
+        base_adapter,
+        cache_client,
+        model=f"{settings.embedding_provider}:{settings.embedding_model}",
+        ttl_seconds=settings.embedding_cache_ttl_seconds,
+        enabled=settings.embedding_cache_enabled,
+    )
 
 
 async def _embed(document_id: uuid.UUID) -> int:
     settings = get_settings()
     engine = build_engine(settings)
     session_factory = build_session_factory(engine)
+    cache_client = build_sync_redis_client(settings)
     try:
         async with session_factory() as session:
             doc_repo = PostgresDocumentRepository(session)
@@ -63,7 +81,7 @@ async def _embed(document_id: uuid.UUID) -> int:
         if not chunks:
             return 0
 
-        adapter = _build_embedding_adapter(settings)
+        adapter = _build_embedding_adapter(settings, cache_client)
         texts = [c.content for c in chunks]
         vectors = adapter.embed(texts)  # type: ignore[attr-defined]
 
@@ -99,6 +117,7 @@ async def _embed(document_id: uuid.UUID) -> int:
         )
         return len(chunks)
     finally:
+        cache_client.close()
         await engine.dispose()
 
 

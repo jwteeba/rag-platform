@@ -36,6 +36,7 @@ class RetrievalService:
         *,
         limit: int,
         document_ids: list[uuid.UUID] | None = None,
+        query_vector: list[float] | None = None,
     ) -> list[SearchResult]:
         query = query.strip()
         if not query:
@@ -43,9 +44,9 @@ class RetrievalService:
 
         limit = min(limit, self._limit_max)
 
-        vectors = self._embedding_port.embed([query])
+        vector = query_vector if query_vector is not None else self.embed_query(query)
         hits = self._vector_search.search(
-            vectors[0],
+            vector,
             owner_id,
             limit=limit,
             score_threshold=self._score_threshold,
@@ -63,3 +64,11 @@ class RetrievalService:
             result.score = scores.get(result.chunk_id, 0.0)
 
         return results
+
+    def embed_query(self, query: str) -> list[float]:
+        """Embed a query through the configured (optionally cached) provider."""
+        query = query.strip()
+        if not query:
+            raise InvalidQueryError("Query must not be empty.")
+        vectors = self._embedding_port.embed([query])
+        return vectors[0]

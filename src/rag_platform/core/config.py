@@ -199,6 +199,15 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     max_conversation_history_messages: int = Field(default=10, ge=0)
 
+    # -- Pipeline caches (Phase 12) ----------------------------------------
+    embedding_cache_enabled: bool = True
+    embedding_cache_ttl_seconds: int = Field(default=86_400, ge=1)
+    retrieval_cache_enabled: bool = True
+    retrieval_cache_ttl_seconds: int = Field(default=600, ge=1)
+    llm_cache_enabled: bool = True
+    llm_cache_ttl_seconds: int = Field(default=300, ge=1)
+    llm_cache_similarity_threshold: float = Field(default=0.97, ge=0.0, le=1.0)
+
     @model_validator(mode="after")
     def _require_openai_key_when_provider_is_openai(self) -> Settings:
         if self.embedding_provider == "openai" and not self.openai_api_key and self.is_production:

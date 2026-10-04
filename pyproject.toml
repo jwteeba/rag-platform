@@ -53,6 +53,7 @@ black = "^24.8.0"
 mypy = "^1.11.2"
 pre-commit = "^3.8.0"
 moto = {extras = ["s3"], version = "^5.2.3"}
+fakeredis = {extras = ["lua"], version = "^2.26.0"}
 flask-cors = "^6.0.5"
 httpx2 = "^2.13.0"
 

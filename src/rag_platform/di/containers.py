@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from rag_platform.core.cache import CacheService, build_redis_client
+from rag_platform.core.cache import CacheService, build_redis_client, build_sync_redis_client
 from rag_platform.core.db import build_engine, build_session_factory
 from rag_platform.core.storage import build_minio_client, ensure_bucket_exists
 from rag_platform.core.vector_store import build_qdrant_client, ensure_collection_exists
@@ -48,6 +48,7 @@ from rag_platform.identity_access.infrastructure.security.password_hasher import
 if TYPE_CHECKING:
     from minio import Minio
     from qdrant_client import QdrantClient
+    from redis import Redis as SyncRedis
     from redis.asyncio import Redis
     from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
     from sqlalchemy.ext.asyncio import AsyncSession as _AsyncSession
@@ -69,6 +70,7 @@ class Container:
     password_hasher: PasswordHasherPort
     token_service: TokenServicePort
     redis_client: Redis
+    cache_sync_client: SyncRedis
     cache_service: CacheService
     refresh_token_cache_ttl_seconds: int
     minio_client: Minio
@@ -102,6 +104,7 @@ def build_container(settings: Settings) -> Container:
     )
 
     redis_client = build_redis_client(settings)
+    cache_sync_client = build_sync_redis_client(settings)
     cache_service = CacheService(redis_client)
 
     minio_client = build_minio_client(settings)
@@ -113,6 +116,7 @@ def build_container(settings: Settings) -> Container:
         password_hasher=password_hasher,
         token_service=token_service,
         redis_client=redis_client,
+        cache_sync_client=cache_sync_client,
         cache_service=cache_service,
         refresh_token_cache_ttl_seconds=settings.refresh_token_cache_ttl_seconds,
         minio_client=minio_client,

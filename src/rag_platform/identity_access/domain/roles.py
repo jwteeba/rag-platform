@@ -40,6 +40,7 @@ class Permission(StrEnum):
     USERS_READ = "users:read"
     USERS_MANAGE = "users:manage"
     PROMPT_TEMPLATES_MANAGE = "prompt_templates:manage"
+    CACHE_STATS_READ = "cache:stats:read"
 
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
@@ -48,6 +49,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             Permission.USERS_READ,
             Permission.USERS_MANAGE,
             Permission.PROMPT_TEMPLATES_MANAGE,
+            Permission.CACHE_STATS_READ,
         }
     ),
     Role.MEMBER: frozenset(),

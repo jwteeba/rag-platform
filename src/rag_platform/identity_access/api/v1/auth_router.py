@@ -72,7 +72,7 @@ async def login(
     response_model=TokenResponse,
     summary="Exchange a refresh token for a new access/refresh pair",
     description=(
-        "Rotates the refresh token: the one submitted here is revoked and " "cannot be reused."
+        "Rotates the refresh token: the one submitted here is revoked and cannot be reused."
     ),
 )
 async def refresh(request: RefreshTokenRequest, auth_service: AuthServiceDep) -> TokenResponse:

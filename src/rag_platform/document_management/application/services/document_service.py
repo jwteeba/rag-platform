@@ -22,7 +22,7 @@ from rag_platform.document_management.domain.exceptions import (
 
 if TYPE_CHECKING:
     import uuid
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from rag_platform.document_management.application.dto.document_dto import UploadDocumentInput
     from rag_platform.document_management.domain.ports import (
@@ -44,6 +44,7 @@ class DocumentService:
         presigned_expiry_seconds: int,
         enqueue_storage_cleanup: Callable[[str], None] | None = None,
         enqueue_document_processing: Callable[[uuid.UUID], None] | None = None,
+        invalidate_retrieval_cache: Callable[[uuid.UUID], Awaitable[None]] | None = None,
     ) -> None:
         self._repo = repository
         self._storage = storage
@@ -52,6 +53,7 @@ class DocumentService:
         self._expiry = presigned_expiry_seconds
         self._enqueue_storage_cleanup = enqueue_storage_cleanup
         self._enqueue_document_processing = enqueue_document_processing
+        self._invalidate_retrieval_cache = invalidate_retrieval_cache
 
     async def upload(self, data: UploadDocumentInput) -> Document:
         if len(data.data) == 0:
@@ -116,6 +118,15 @@ class DocumentService:
     async def delete(self, document_id: uuid.UUID, *, requester_id: uuid.UUID) -> None:
         document = await self.get(document_id, requester_id=requester_id)
         await self._repo.delete(document_id)
+        if self._invalidate_retrieval_cache is not None:
+            try:
+                await self._invalidate_retrieval_cache(document.owner_id)
+            except Exception:
+                logger.warning(
+                    "retrieval_cache_invalidation_failed",
+                    owner_id=str(document.owner_id),
+                    exc_info=True,
+                )
         # The API deletion is complete once its metadata is gone.  Storage is
         # best effort: a failure leaves an orphan and queues its retry rather
         # than turning a successful delete into an opaque client error.

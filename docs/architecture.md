@@ -61,7 +61,7 @@ API  →  Application  →  Domain  ←  Infrastructure
 | Prompt assembly | tiktoken token counting, greedy chunk fitting (drop lowest-score first), inline source attribution, Postgres-backed templates seeded at startup | [0014](adr/0014-prompt-assembly-strategy.md) |
 | IdentityAccess persistence | **In-memory adapters (Phase 2, ADR-0005)** still shipped and unit-tested; **Postgres adapters (Phase 3, ADR-0006)**, further wrapped in a **Redis cache-aside layer (Phase 4, ADR-0007)** for refresh-token lookups, are what the running application actually uses — all behind the same `UserRepositoryPort` / `RefreshTokenStorePort` | [0005](adr/0005-in-memory-persistence-for-phase-2-auth.md), [0006](adr/0006-postgres-persistence-identity-access.md), [0007](adr/0007-redis-caching-and-session-management.md) |
 | RBAC model | **Fixed two roles** (ADMIN, MEMBER); permissions (not roles) are what's checked everywhere, so dynamic roles later is a contained change | [0005](adr/0005-in-memory-persistence-for-phase-2-auth.md) |
-| Caching / "session management" scope | **Generic Redis infra + one concrete consumer** (refresh-token cache-aside), not speculative caching for embeddings/LLM/etc. that don't exist yet. "Session management" interpreted as literal user-facing session control (list/revoke sessions), since refresh tokens are the only session-like concept this app has | [0007](adr/0007-redis-caching-and-session-management.md) |
+| Caching | Refresh-token cache-aside plus Phase 12 embedding, owner-scoped vector-search, and semantic answer caches; Redis failures fall through to source providers | [0007](adr/0007-redis-caching-and-session-management.md), [0017](adr/0017-caching-strategy.md) |
 
 The multi-tenancy choice means every tenant-*owned* table (documents,
 chunks, conversations, etc., in later phases) will carry a `workspace_id`
@@ -188,6 +188,11 @@ is the reference example of that structure in practice.
   consumer exists so far: `CachedRefreshTokenStore`, wrapping the Postgres
   refresh-token store. See ADR-0007 for scope and an honest note on what
   benefit this actually provides given refresh tokens are single-use.
+- **RAG caches**: Phase 12 adds content-addressed embedding cache, owner- and
+  filter-scoped vector search cache, and a high-threshold owner-scoped semantic
+  answer cache. Document deletion invalidates retrieval entries best-effort;
+  new indexing and LLM responses rely on short TTLs. `GET /api/v1/admin/cache/stats`
+  reports per-layer counters and Redis memory. See ADR-0017.
 - **Sessions**: "session" means an unrevoked, unexpired refresh token.
   `GET /users/me/sessions` / `DELETE .../sessions/{id}` / `POST
   .../sessions/revoke-all` — see ADR-0007.
@@ -264,3 +269,7 @@ is the reference example of that structure in practice.
 - **Phase 11** — LLM Integration + Answer Generation: provider port and OpenAI/Anthropic
   adapters, owner-scoped conversation/message persistence, retrieval + prompt orchestration,
   completion and SSE APIs, and history-aware context budgeting (ADRs 0015 and 0016).
+- **Phase 12** — Caching Layer + Performance Optimization: Redis-backed exact
+  embedding/retrieval caches, high-threshold semantic answer cache, deletion
+  invalidation for retrieval keys, structured hit/miss metrics, and admin cache
+  statistics (ADR-0017).

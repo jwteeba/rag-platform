@@ -41,6 +41,7 @@ from rag_platform.generation.api.v1.conversation_router import router as convers
 from rag_platform.generation.api.v1.router import router as generation_router
 from rag_platform.identity_access.api.v1.auth_router import router as auth_router
 from rag_platform.identity_access.api.v1.users_router import router as users_router
+from rag_platform.platform.cache.router import router as cache_router
 from rag_platform.platform.health.router import router as health_router
 from rag_platform.retrieval.api.v1.router import router as retrieval_router
 
@@ -65,6 +66,7 @@ def _build_lifespan(
         yield
         await app.state.container.engine.dispose()
         await app.state.container.redis_client.aclose()
+        app.state.container.cache_sync_client.close()
         logger.info("application_shutdown_complete")
 
     return lifespan
@@ -120,6 +122,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_exception_handler(RequestValidationError, validation_error_handler)
 
     app.include_router(health_router)
+    app.include_router(cache_router, prefix=settings.api_v1_prefix)
     app.include_router(auth_router, prefix=settings.api_v1_prefix)
     app.include_router(users_router, prefix=settings.api_v1_prefix)
     app.include_router(documents_router, prefix=settings.api_v1_prefix)

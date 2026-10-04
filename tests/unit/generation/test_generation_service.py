@@ -7,7 +7,12 @@ from datetime import UTC, datetime
 import pytest
 
 from rag_platform.generation.application.services.generation_service import GenerationService
-from rag_platform.generation.domain.entities import AssembledPrompt, Conversation, Message
+from rag_platform.generation.domain.entities import (
+    AssembledPrompt,
+    Conversation,
+    GenerationResult,
+    Message,
+)
 from rag_platform.generation.domain.exceptions import ContextWindowExceededError
 
 
@@ -53,13 +58,27 @@ class FakeMessages:
 
 
 class FakeRetrieval:
-    async def search(self, query: str, owner_id: uuid.UUID, *, limit: int):
+    def embed_query(self, query: str) -> list[float]:
+        return [1.0, 0.0]
+
+    async def search(self, query: str, owner_id: uuid.UUID, *, limit: int, query_vector=None):
         return []
 
 
 class FakeAssembler:
     async def assemble(self, query: str, chunks: list[object]) -> AssembledPrompt:
         return AssembledPrompt("system", [], query, 2, f"Question: {query}")
+
+
+class FakeSemanticCache:
+    def __init__(self, result) -> None:
+        self.result = result
+
+    def lookup(self, owner_id, query_vector, *, namespace, similarity_threshold):
+        return self.result
+
+    def store(self, owner_id, query_vector, result, *, namespace):
+        self.result = result
 
 
 @pytest.mark.asyncio
@@ -147,3 +166,34 @@ async def test_stream_yields_incremental_chunks_and_persists_completed_turn() ->
     assert chunks == ["A ", "streamed answer"]
     assert [message.role for message in messages.items] == ["user", "assistant"]
     assert messages.items[-1].content == "A streamed answer"
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_returns_same_result_without_calling_llm() -> None:
+    owner = uuid.uuid4()
+    conversations, messages, llm = FakeConversations(), FakeMessages(), FakeLLM()
+    cached = GenerationResult("cached response", [], 9, 4, 13)
+    service = GenerationService(
+        conversations,
+        messages,
+        llm,
+        FakeRetrieval(),
+        FakeAssembler(),
+        FakeCounter(),
+        owner_id=owner,
+        model="fake",
+        temperature=0,
+        max_tokens=20,
+        max_context_tokens=100,
+        history_limit=10,
+        semantic_cache=FakeSemanticCache(cached),
+    )
+
+    _, result = await service.start("similar question")
+
+    assert result == cached
+    assert llm.calls == []
+    assert [message.content for message in messages.items] == [
+        "similar question",
+        "cached response",
+    ]
