@@ -20,8 +20,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      # Use port 6380 for host to avoids silent host-port collision.
-      - "6380:6379"
+      - "6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -78,7 +77,7 @@ services:
       APP_ENVIRONMENT: development
       APP_LOG_FORMAT: console
       APP_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/rag_platform
-      APP_REDIS_URL: redis://redis:6379/0
+      APP_REDIS_HOST: redis://redis:6379/0
       APP_MINIO_ENDPOINT: minio:9000
       APP_MINIO_ACCESS_KEY: minioadmin
       APP_MINIO_SECRET_KEY: minioadmin
@@ -114,7 +113,7 @@ services:
     environment:
       APP_ENVIRONMENT: development
       APP_LOG_FORMAT: console
-      APP_REDIS_URL: redis://redis:6379/0
+      APP_REDIS_HOST: redis://redis:6379/0
       APP_MINIO_ENDPOINT: minio:9000
       APP_MINIO_ACCESS_KEY: minioadmin
       APP_MINIO_SECRET_KEY: minioadmin
@@ -141,7 +140,7 @@ services:
     env_file:
       - .env
     environment:
-      APP_REDIS_URL: redis://redis:6379/0
+      APP_REDIS_HOST: redis://redis:6379/0
     volumes:
       - ./src:/app/src
     depends_on:

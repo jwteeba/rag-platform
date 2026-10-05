@@ -25,7 +25,7 @@ worker:
 # below and `test` itself pins these explicitly, overriding any
 # APP_TEST_* already present in the shell or `.env`.
 TEST_DATABASE_URL := postgresql+asyncpg://postgres:postgres@localhost:5433/rag_platform_test
-TEST_REDIS_URL := redis://localhost:6380/1
+TEST_REDIS_HOST := redis://localhost:6379/1
 TEST_MINIO_ENDPOINT := localhost:9000
 TEST_MINIO_BUCKET := rag-platform-test
 TEST_QDRANT_HOST := localhost
@@ -84,7 +84,7 @@ test-qdrant-up:
 # set in your shell or `.env` (the explicit assignment below overrides all of
 # them for this command only; nothing is permanently exported to your shell).
 test: test-db-migrate test-redis-up test-minio-up test-qdrant-up
-	APP_TEST_DATABASE_URL=$(TEST_DATABASE_URL) APP_TEST_REDIS_URL=$(TEST_REDIS_URL) \
+	APP_TEST_DATABASE_URL=$(TEST_DATABASE_URL) APP_TEST_REDIS_HOST=$(TEST_REDIS_HOST) \
 	APP_TEST_MINIO_ENDPOINT=$(TEST_MINIO_ENDPOINT) APP_TEST_MINIO_BUCKET=$(TEST_MINIO_BUCKET) \
 	APP_TEST_QDRANT_HOST=$(TEST_QDRANT_HOST) APP_TEST_QDRANT_PORT=$(TEST_QDRANT_PORT) \
 	poetry run pytest

@@ -19,6 +19,13 @@ from typing import TYPE_CHECKING, Any
 from redis import ConnectionPool as SyncConnectionPool
 from redis import Redis as SyncRedis
 from redis.asyncio import ConnectionPool, Redis
+from redis.asyncio.connection import SSLConnection as AsyncSSLConnection
+from redis.asyncio.retry import Retry as AsyncRetry
+from redis.backoff import ExponentialBackoff
+from redis.connection import SSLConnection as SyncSSLConnection
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
+from redis.retry import Retry as SyncRetry
 
 from rag_platform.core.logging import get_logger
 
@@ -27,23 +34,60 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+_RETRY_ERRORS = [RedisConnectionError, RedisTimeoutError]
+
+
+def _pool_kwargs(settings: Settings) -> dict[str, Any]:
+    """Connection settings shared by the sync and async pools.
+
+    Works for both a local docker Redis (no auth, no TLS) and a managed
+    Redis (username/password, optionally TLS), driven purely by settings.
+    """
+    kwargs: dict[str, Any] = {
+        "host": settings.redis_host,
+        "port": settings.redis_port,
+        "db": settings.redis_db,
+        "max_connections": settings.redis_max_connections,
+        "decode_responses": True,
+        "socket_timeout": settings.redis_socket_timeout,
+        "socket_connect_timeout": settings.redis_connect_timeout,
+        "health_check_interval": settings.redis_health_check_interval,
+        "retry_on_error": _RETRY_ERRORS,
+    }
+
+    # Only send AUTH when a password is configured. A username without a
+    # password would make redis-py attempt a failing AUTH against a local
+    # Redis that has no auth enabled.
+    if settings.redis_password is not None:
+        kwargs["password"] = settings.redis_password.get_secret_value()
+        if settings.redis_username:
+            kwargs["username"] = settings.redis_username
+
+    return kwargs
+
 
 def build_redis_client(settings: Settings) -> Redis:
     """Create the async Redis client from application settings."""
-    pool = ConnectionPool.from_url(
-        settings.redis_url,
-        max_connections=settings.redis_max_connections,
-        decode_responses=True,
+    extra: dict[str, Any] = {}
+    if settings.redis_ssl:
+        extra["connection_class"] = AsyncSSLConnection
+    pool = ConnectionPool(
+        retry=AsyncRetry(ExponentialBackoff(cap=1.0, base=0.05), 3),
+        **_pool_kwargs(settings),
+        **extra,
     )
     return Redis(connection_pool=pool)
 
 
 def build_sync_redis_client(settings: Settings) -> SyncRedis:
     """Build the Redis client used by synchronous embedding/vector adapters."""
-    pool = SyncConnectionPool.from_url(
-        settings.redis_url,
-        max_connections=settings.redis_max_connections,
-        decode_responses=True,
+    extra: dict[str, Any] = {}
+    if settings.redis_ssl:
+        extra["connection_class"] = SyncSSLConnection
+    pool = SyncConnectionPool(
+        retry=SyncRetry(ExponentialBackoff(cap=1.0, base=0.05), 3),
+        **_pool_kwargs(settings),
+        **extra,
     )
     return SyncRedis(connection_pool=pool)
 

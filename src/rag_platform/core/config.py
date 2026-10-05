@@ -17,8 +17,9 @@ from __future__ import annotations
 from enum import StrEnum
 from functools import lru_cache
 from typing import Annotated, Literal
+from urllib.parse import quote
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -110,9 +111,19 @@ class Settings(BaseSettings):
     database_echo: bool = False
 
     # -- Cache / Redis (Phase 4) --------------------------------------------
-    redis_url: str = "redis://localhost:6379/0"
-    redis_max_connections: int = Field(default=20, ge=1)
-    # Default TTL for cached refresh-token revocation lookups (see
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_db: int = 0
+    redis_username: str | None = None
+    redis_password: SecretStr | None = None
+    redis_ssl: bool = False
+    redis_max_connections: int = 50
+    redis_socket_timeout: float = 5.0
+    redis_connect_timeout: float = 2.0
+    redis_health_check_interval: int = 30
+
+    # Default TTL for cached refresh-token
+    #  revocation lookups (see
     # `identity_access/infrastructure/repositories/cached_refresh_token_store.py`).
     # Deliberately short — a stale "not revoked" cache entry is a genuine
     # (if small) security exposure window: a token revoked via logout could
@@ -263,14 +274,25 @@ class Settings(BaseSettings):
         return self.environment is Environment.DEVELOPMENT
 
     @property
+    def redis_dsn(self) -> str:
+        """Full Redis URL built from the individual redis_* settings."""
+        scheme = "rediss" if self.redis_ssl else "redis"
+        auth = ""
+        if self.redis_password is not None:
+            user = quote(self.redis_username or "", safe="")
+            pwd = quote(self.redis_password.get_secret_value(), safe="")
+            auth = f"{user}:{pwd}@"
+        return f"{scheme}://{auth}{self.redis_host}:{self.redis_port}/{self.redis_db}"
+
+    @property
     def resolved_celery_broker_url(self) -> str:
         """Broker URL, defaulting to the existing Redis deployment."""
-        return self.celery_broker_url or self.redis_url
+        return self.celery_broker_url or self.redis_dsn
 
     @property
     def resolved_celery_result_backend(self) -> str:
         """Result backend URL, defaulting to the existing Redis deployment."""
-        return self.celery_result_backend or self.redis_url
+        return self.celery_result_backend or self.redis_dsn
 
 
 @lru_cache
