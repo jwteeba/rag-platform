@@ -46,7 +46,7 @@ from rag_platform.platform.health.router import router as health_router
 from rag_platform.retrieval.api.v1.router import router as retrieval_router
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable
+    from collections.abc import AsyncGenerator, Callable
 
 logger = get_logger(__name__)
 
@@ -55,7 +55,7 @@ def _build_lifespan(
     settings: Settings,
 ) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
     @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.container = build_container(settings)
         app.state.settings = settings
         await ensure_storage_bucket(app.state.container, settings)
