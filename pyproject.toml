@@ -184,6 +184,13 @@ addopts = "-ra --strict-markers --cov=rag_platform --cov-report=term-missing --c
 testpaths = ["tests"]
 asyncio_mode = "auto"
 pythonpath = ["src"]
+filterwarnings = [
+    "error::DeprecationWarning",
+    "default::PendingDeprecationWarning",
+    # Third-party: starlette's TestClient uses a deprecated anyio alias.
+    # TODO: Remove once Starlette switches to anyio.from_thread.BlockingPortal.
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+]
 
 # ---------------------------------------------------------------------------
 # Coverage
