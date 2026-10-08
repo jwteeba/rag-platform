@@ -51,9 +51,10 @@ async def readiness(request: Request, response: Response) -> ReadinessResponse:
     container: Container = request.app.state.container
 
     checks: dict[str, str] = {
-        "database": await _check_database(container),
+        "postgresql": await _check_database(container),
         "redis": await _check_redis(container),
-        "storage": await _check_storage(container, settings),
+        "minio": await _check_storage(container, settings),
+        "qdrant": await _check_vector_database(container),
     }
 
     all_ok = all(result == "ok" for result in checks.values())
@@ -99,6 +100,17 @@ async def _check_storage(container: Container, settings: Settings) -> str:
 
     try:
         await asyncio.to_thread(container.minio_client.bucket_exists, settings.minio_bucket)
+    except Exception as exc:  # deliberately broad — see docstring
+        return f"unreachable: {exc}"
+    return "ok"
+
+
+async def _check_vector_database(container: Container) -> str:
+    """Check Qdrant vector database reachability. Same never-raises contract."""
+    import asyncio
+
+    try:
+        await asyncio.to_thread(container.qdrant_client.get_collections)
     except Exception as exc:  # deliberately broad — see docstring
         return f"unreachable: {exc}"
     return "ok"
