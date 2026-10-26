@@ -75,6 +75,12 @@ class Settings(BaseSettings):
     log_level: LogLevel = LogLevel.INFO
     log_format: LogFormat = LogFormat.CONSOLE
 
+    # -- Observability (Phase 13) -----------------------------------------
+    otel_enabled: bool = True
+    otel_endpoint: str = "http://localhost:4318/v1/traces"
+    otel_service_name: str = "rag-platform"
+    prometheus_enabled: bool = True
+
     host: str = "0.0.0.0"
     port: int = Field(default=8000, ge=1, le=65535)
 

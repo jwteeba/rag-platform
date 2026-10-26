@@ -14,6 +14,8 @@ from rag_platform.core.celery import celery_app
 from rag_platform.core.config import get_settings
 from rag_platform.core.db import build_engine, build_session_factory
 from rag_platform.core.logging import get_logger
+from rag_platform.core.metrics import CHUNKS_INDEXED, EMBEDDING_LATENCY
+from rag_platform.core.telemetry import get_tracer, instrument_sqlalchemy
 from rag_platform.core.vector_store import build_qdrant_client
 from rag_platform.document_management.domain.entities import EmbeddingStatus
 from rag_platform.document_management.infrastructure.repositories.postgres_chunk_repository import (
@@ -66,6 +68,7 @@ def _build_embedding_adapter(settings: object, cache_client: object) -> object:
 async def _embed(document_id: uuid.UUID) -> int:
     settings = get_settings()
     engine = build_engine(settings)
+    instrument_sqlalchemy(engine, settings)
     session_factory = build_session_factory(engine)
     cache_client = build_sync_redis_client(settings)
     try:
@@ -83,7 +86,9 @@ async def _embed(document_id: uuid.UUID) -> int:
 
         adapter = _build_embedding_adapter(settings, cache_client)
         texts = [c.content for c in chunks]
+        started_at = asyncio.get_running_loop().time()
         vectors = adapter.embed(texts)  # type: ignore[attr-defined]
+        EMBEDDING_LATENCY.observe(asyncio.get_running_loop().time() - started_at)
 
         qdrant = build_qdrant_client(settings)
         points = [
@@ -99,7 +104,10 @@ async def _embed(document_id: uuid.UUID) -> int:
             )
             for chunk, vector in zip(chunks, vectors, strict=True)
         ]
-        qdrant.upsert(collection_name=settings.qdrant_collection_name, points=points)
+        with get_tracer(__name__).start_as_current_span("qdrant.upsert") as span:
+            span.set_attribute("qdrant.collection", settings.qdrant_collection_name)
+            span.set_attribute("qdrant.points", len(points))
+            qdrant.upsert(collection_name=settings.qdrant_collection_name, points=points)
 
         # Mark chunks as indexed and record the Qdrant point id.
         for chunk, point in zip(chunks, points, strict=True):
@@ -115,6 +123,7 @@ async def _embed(document_id: uuid.UUID) -> int:
             document_id=str(document_id),
             chunk_count=len(chunks),
         )
+        CHUNKS_INDEXED.inc(len(chunks))
         return len(chunks)
     finally:
         cache_client.close()

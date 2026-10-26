@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import hashlib
+import time
 from typing import TYPE_CHECKING
 
+from rag_platform.core.logging import get_logger
+from rag_platform.core.metrics import LLM_LATENCY, LLM_TOKENS_USED
 from rag_platform.generation.domain.entities import Conversation, GenerationResult, Message
 from rag_platform.generation.domain.exceptions import (
     ContextWindowExceededError,
     ConversationNotFoundError,
 )
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     import uuid
@@ -47,6 +52,7 @@ class GenerationService:
         semantic_cache: SemanticResponseCachePort | None = None,
         cache_namespace: str = "",
         cache_similarity_threshold: float = 0.97,
+        provider: str = "unknown",
     ) -> None:
         self.conversations, self.messages, self.llm = conversations, messages, llm
         self.retrieval, self.assembler, self.counter = retrieval, assembler, counter
@@ -56,6 +62,7 @@ class GenerationService:
         self.semantic_cache = semantic_cache
         self.cache_namespace = cache_namespace
         self.cache_similarity_threshold = cache_similarity_threshold
+        self.provider = provider
 
     async def start(self, query: str, *, limit: int = 5) -> tuple[Conversation, GenerationResult]:
         conversation = Conversation.create(self.owner_id, query.strip()[:200])
@@ -102,9 +109,11 @@ class GenerationService:
             if m.role in {"user", "assistant"}
         )
         llm_messages.append({"role": "user", "content": prompt.rendered_user_prompt})
+        llm_started_at = time.perf_counter()
         answer, used_prompt, completion = await self.llm.complete(
             llm_messages, model=self.model, temperature=self.temperature, max_tokens=self.max_tokens
         )
+        LLM_LATENCY.labels(model=self.model).observe(time.perf_counter() - llm_started_at)
         sources: list[dict[str, str | int]] = [
             {"filename": fn, "chunk_index": idx} for fn, idx, _ in prompt.context_chunks
         ]
@@ -114,6 +123,16 @@ class GenerationService:
             used_prompt or prompt_tokens,
             completion,
             (used_prompt or prompt_tokens) + completion,
+        )
+        LLM_TOKENS_USED.labels(model=self.model, provider=self.provider).inc(result.total_tokens)
+        logger.info(
+            "llm_usage",
+            model=self.model,
+            provider=self.provider,
+            prompt_tokens=result.prompt_tokens,
+            completion_tokens=result.completion_tokens,
+            total_tokens=result.total_tokens,
+            estimated_cost_usd=None,
         )
         await self._store_cached(query_vector, namespace, result)
         await self._persist_turn(conversation, query, result)
@@ -153,11 +172,13 @@ class GenerationService:
         )
         llm_messages.append({"role": "user", "content": prompt.rendered_user_prompt})
         parts: list[str] = []
+        llm_started_at = time.perf_counter()
         async for chunk in self.llm.stream(
             llm_messages, model=self.model, temperature=self.temperature, max_tokens=self.max_tokens
         ):
             parts.append(chunk)
             yield chunk
+        LLM_LATENCY.labels(model=self.model).observe(time.perf_counter() - llm_started_at)
         answer = "".join(parts)
         prompt_tokens = self.counter.count(prompt.system_prompt) + self.counter.count(
             prompt.rendered_user_prompt
@@ -170,6 +191,16 @@ class GenerationService:
             prompt_tokens=prompt_tokens,
             completion_tokens=self.counter.count(answer),
             total_tokens=prompt_tokens + self.counter.count(answer),
+        )
+        LLM_TOKENS_USED.labels(model=self.model, provider=self.provider).inc(result.total_tokens)
+        logger.info(
+            "llm_usage",
+            model=self.model,
+            provider=self.provider,
+            prompt_tokens=result.prompt_tokens,
+            completion_tokens=result.completion_tokens,
+            total_tokens=result.total_tokens,
+            estimated_cost_usd=None,
         )
         await self._store_cached(query_vector, namespace, result)
         await self._persist_turn(conversation, query, result)

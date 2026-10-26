@@ -219,6 +219,12 @@ is the reference example of that structure in practice.
   forwards JSON-safe structlog context through broker headers. Tests set
   `task_always_eager=True`; Compose runs a real worker and Flower. See
   ADR-0009 for retry and terminal-failure handling.
+- **Observability**: OpenTelemetry traces enter at FastAPI and continue through
+  SQLAlchemy, Redis, HTTP clients, Celery task boundaries, Qdrant, and MinIO.
+  Prometheus exposes framework and application metrics at `/metrics`; Grafana
+  provisions the operational dashboard. `/health/detailed` is permission-gated
+  and adds dependency latency, pool capacity, cache rates, and Celery reachability
+  to the anonymous liveness/readiness probes. See ADR-0018 and the alerting runbook.
 
 ## Phase status
 
@@ -273,3 +279,7 @@ is the reference example of that structure in practice.
   embedding/retrieval caches, high-threshold semantic answer cache, deletion
   invalidation for retrieval keys, structured hit/miss metrics, and admin cache
   statistics (ADR-0017).
+- **Phase 13** — Observability + Monitoring: OpenTelemetry OTLP tracing,
+  Prometheus custom metrics and scrape endpoint, Jaeger/Grafana Compose stack,
+  structured trace-aware logs and alert dimensions, detailed admin health, and
+  alerting documentation. Complete.

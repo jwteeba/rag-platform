@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 from qdrant_client.models import Condition, FieldCondition, Filter, MatchAny, MatchValue
 
+from rag_platform.core.telemetry import get_tracer
+
 if TYPE_CHECKING:
     import uuid
 
@@ -53,13 +55,15 @@ class QdrantVectorSearch:
                 )
             )
 
-        results = self._client.search(
-            collection_name=self._collection,
-            query_vector=query_vector,
-            query_filter=Filter(must=conditions),
-            limit=limit,
-            score_threshold=score_threshold,
-        )
+        with get_tracer(__name__).start_as_current_span("qdrant.search") as span:
+            span.set_attribute("qdrant.collection", self._collection)
+            results = self._client.search(
+                collection_name=self._collection,
+                query_vector=query_vector,
+                query_filter=Filter(must=conditions),
+                limit=limit,
+                score_threshold=score_threshold,
+            )
 
         output: list[tuple[uuid.UUID, float]] = []
 

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from minio.error import S3Error
 
+from rag_platform.core.telemetry import get_tracer
 from rag_platform.document_management.domain.ports import ObjectStoragePort
 
 if TYPE_CHECKING:
@@ -36,7 +37,9 @@ class MinioObjectStorage(ObjectStoragePort):
                 content_type=content_type,
             )
 
-        await asyncio.to_thread(_put)
+        with get_tracer(__name__).start_as_current_span("minio.put_object") as span:
+            span.set_attribute("minio.bucket", self._bucket)
+            await asyncio.to_thread(_put)
 
     async def exists(self, key: str) -> bool:
         def _stat() -> bool:
@@ -51,10 +54,12 @@ class MinioObjectStorage(ObjectStoragePort):
                     return False
                 raise
 
-        return await asyncio.to_thread(_stat)
+        with get_tracer(__name__).start_as_current_span("minio.stat_object"):
+            return await asyncio.to_thread(_stat)
 
     async def delete(self, key: str) -> None:
-        await asyncio.to_thread(self._client.remove_object, self._bucket, key)
+        with get_tracer(__name__).start_as_current_span("minio.remove_object"):
+            await asyncio.to_thread(self._client.remove_object, self._bucket, key)
 
     async def read(self, key: str) -> bytes:
         def _get() -> bytes:
@@ -65,7 +70,8 @@ class MinioObjectStorage(ObjectStoragePort):
                 response.close()
                 response.release_conn()
 
-        return await asyncio.to_thread(_get)
+        with get_tracer(__name__).start_as_current_span("minio.get_object"):
+            return await asyncio.to_thread(_get)
 
     async def presigned_download_url(self, key: str, *, expiry_seconds: int) -> str:
         def _presign() -> str:
@@ -73,4 +79,5 @@ class MinioObjectStorage(ObjectStoragePort):
                 self._bucket, key, expires=timedelta(seconds=expiry_seconds)
             )
 
-        return await asyncio.to_thread(_presign)
+        with get_tracer(__name__).start_as_current_span("minio.presign_get_object"):
+            return await asyncio.to_thread(_presign)

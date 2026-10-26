@@ -8,7 +8,9 @@ API Documentation:
 
 ![API Docs](images/rag_api_doc.png)
 
-**Current phase: Phase 12: Caching Layer + Performance Optimization.** Phase 12
+**Current phase: Phase 13: Observability + Monitoring.** Phase 13 adds OpenTelemetry
+traces, Prometheus metrics, a provisioned Grafana dashboard, detailed admin health,
+and portable structured-alert fields. Phase 12
 establishes the crucial bridge between retrieval (Phase 9) and generation
 (Phase 11). It takes the top-ranked text chunks from the retrieval engine,
 filters and fits them within a strict model token budget, applies source
@@ -40,8 +42,8 @@ make install
 # Copy environment template and adjust as needed
 cp .env.example .env
 
-# Start Postgres, Redis, MinIO, and Qdrant if you don't already have them reachable (skip if you do)
-docker compose up -d postgres redis minio qdrant
+# Start application dependencies and the local observability stack (skip any already reachable services)
+docker compose up -d postgres redis minio qdrant otel-collector jaeger prometheus grafana
 
 # Apply database migrations
 make db-upgrade
@@ -57,6 +59,8 @@ The API is now available at `http://localhost:8000`:
 
 - `GET /health/live` — liveness probe
 - `GET /health/ready` — readiness probe
+- `GET /health/detailed` — admin-only dependency latency, pool, cache, and worker diagnostics
+- `GET /metrics` — Prometheus scrape endpoint
 - `GET /api/v1/docs` — interactive OpenAPI docs
 - `GET /api/v1/openapi.json` — raw OpenAPI schema
 - `POST /api/v1/auth/register` — create a user (always assigned the MEMBER role)
@@ -105,11 +109,17 @@ assigns the MEMBER role.
 make docker-up
 ```
 
-This starts `postgres`, `redis`, `minio`, `qdrant`, a `celery_worker`, and Flower (each dependency with a healthcheck the
+This starts `postgres`, `redis`, `minio`, `qdrant`, an OpenTelemetry Collector, Jaeger,
+Prometheus, Grafana, a `celery_worker`, and Flower (each dependency with a healthcheck the
 `api` service waits on) and builds/starts the `api` service on
 `http://localhost:8000` with live reload against your local `src/`
 directory. Run `make db-upgrade` once Postgres is up if this is a fresh
 volume.
+
+After startup, open [Jaeger](http://localhost:16686) to explore distributed traces and
+[Grafana](http://localhost:3000) (default `admin` / `admin`) for the automatically
+provisioned **RAG Platform Overview** dashboard. Prometheus is available at
+[localhost:9090](http://localhost:9090); it scrapes the API's `/metrics` endpoint.
 
 ## Database migrations
 

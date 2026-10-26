@@ -10,6 +10,7 @@ import hashlib
 from typing import TYPE_CHECKING
 
 from rag_platform.core.logging import get_logger
+from rag_platform.core.metrics import DOCUMENTS_UPLOADED
 from rag_platform.document_management.domain.entities import Document
 from rag_platform.document_management.domain.exceptions import (
     DocumentNotFoundError,
@@ -91,6 +92,7 @@ class DocumentService:
             raise FileAlreadyExistsError() from None
 
         await self._storage.upload(document.storage_key, data.data, data.content_type)
+        DOCUMENTS_UPLOADED.labels(content_type=data.content_type).inc()
         if self._enqueue_document_processing is not None:
             try:
                 self._enqueue_document_processing(document.id)

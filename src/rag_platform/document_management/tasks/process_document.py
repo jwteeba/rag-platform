@@ -12,6 +12,7 @@ from rag_platform.core.config import get_settings
 from rag_platform.core.db import build_engine, build_session_factory
 from rag_platform.core.logging import get_logger
 from rag_platform.core.storage import build_minio_client
+from rag_platform.core.telemetry import instrument_sqlalchemy
 from rag_platform.document_management.application.services.chunking_service import ChunkingService
 from rag_platform.document_management.application.services.text_extraction import extract_text
 from rag_platform.document_management.domain.entities import DocumentStatus
@@ -35,6 +36,7 @@ logger = get_logger(__name__)
 async def _process(document_id: uuid.UUID) -> int:
     settings = get_settings()
     engine = build_engine(settings)
+    instrument_sqlalchemy(engine, settings)
     session_factory = build_session_factory(engine)
     try:
         async with session_factory() as session:

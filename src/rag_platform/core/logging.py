@@ -14,10 +14,29 @@ from __future__ import annotations
 
 import logging
 import sys
+from typing import TYPE_CHECKING, Any
 
 import structlog
+from opentelemetry import trace
 
 from rag_platform.core.config import LogFormat, Settings
+
+if TYPE_CHECKING:
+    from collections.abc import MutableMapping
+
+
+def add_trace_context(
+    _logger: Any, _method_name: str, event_dict: MutableMapping[str, Any]
+) -> MutableMapping[str, Any]:
+    """Attach the active OpenTelemetry identifiers to every structured event."""
+    context = trace.get_current_span().get_span_context()
+    event_dict["trace_id"] = format(context.trace_id, "032x") if context.is_valid else None
+    event_dict["span_id"] = format(context.span_id, "016x") if context.is_valid else None
+    # Stable alert dimensions make platform-specific log rules portable.
+    event_dict.setdefault("error_type", None)
+    event_dict.setdefault("document_id", None)
+    event_dict.setdefault("user_id", None)
+    return event_dict
 
 
 def configure_logging(settings: Settings) -> None:
@@ -31,6 +50,7 @@ def configure_logging(settings: Settings) -> None:
 
     shared_processors: list[structlog.typing.Processor] = [
         structlog.contextvars.merge_contextvars,
+        add_trace_context,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),

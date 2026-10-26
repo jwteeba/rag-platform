@@ -31,3 +31,14 @@ class ReadinessResponse(BaseModel):
     checks: dict[str, str] = Field(
         description="Per-dependency status ('ok' or an error message), keyed by dependency name."
     )
+
+
+class DetailedHealthResponse(BaseModel):
+    """Operator-only dependency and runtime capacity diagnostics."""
+
+    status: str
+    version: str
+    dependencies: dict[str, dict[str, str | float | None]]
+    database_pool: dict[str, int]
+    cache_hit_rates: dict[str, float]
+    celery_workers: list[str]

@@ -88,7 +88,9 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                 ),
             )
         except Exception:
-            logger.exception("unhandled_exception", path=request.url.path)
+            logger.exception(
+                "unhandled_exception", path=request.url.path, error_type="internal-server-error"
+            )
             problem = build_problem_detail(
                 error_type="internal-server-error",
                 status=HTTPStatus.INTERNAL_SERVER_ERROR,
@@ -118,7 +120,12 @@ async def http_exception_handler(request: Request, exc: Exception) -> JSONRespon
     exc = cast("HTTPException", exc)
     status = HTTPStatus(exc.status_code)
     error_type = status.phrase.lower().replace(" ", "-")
-    logger.warning("http_exception", status_code=exc.status_code, path=request.url.path)
+    logger.warning(
+        "http_exception",
+        status_code=exc.status_code,
+        path=request.url.path,
+        error_type=error_type,
+    )
     problem = build_problem_detail(
         error_type=error_type,
         status=status,
@@ -143,7 +150,12 @@ async def validation_error_handler(request: Request, exc: Exception) -> JSONResp
     guesswork.
     """
     exc = cast("RequestValidationError", exc)
-    logger.warning("validation_error", path=request.url.path, errors=exc.errors())
+    logger.warning(
+        "validation_error",
+        path=request.url.path,
+        errors=exc.errors(),
+        error_type="validation-error",
+    )
     problem = build_problem_detail(
         error_type="validation-error",
         status=HTTPStatus.UNPROCESSABLE_ENTITY,

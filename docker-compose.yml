@@ -62,6 +62,49 @@ services:
       retries: 10
       start_period: 5s
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.159.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./infra/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4318:4318"
+    depends_on:
+      jaeger:
+        condition: service_started
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.63.0
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:13.0.11
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+
   api:
     build:
       context: .
@@ -84,6 +127,7 @@ services:
       APP_MINIO_SECURE: "false"
       APP_QDRANT_HOST: qdrant
       APP_QDRANT_PORT: "6333"
+      APP_OTEL_ENDPOINT: http://otel-collector:4318/v1/traces
     volumes:
       - ./src:/app/src
       - ./alembic:/app/alembic
@@ -120,6 +164,7 @@ services:
       APP_MINIO_SECURE: "false"
       APP_QDRANT_HOST: qdrant
       APP_QDRANT_PORT: "6333"
+      APP_OTEL_ENDPOINT: http://otel-collector:4318/v1/traces
     volumes:
       - ./src:/app/src
     depends_on:

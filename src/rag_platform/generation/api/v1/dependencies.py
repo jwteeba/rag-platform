@@ -95,4 +95,5 @@ def get_generation_service(
             f"{settings.search_score_threshold}"
         ),
         cache_similarity_threshold=settings.llm_cache_similarity_threshold,
+        provider=settings.llm_provider,
     )

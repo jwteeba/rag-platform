@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: RAG Platform
+    folder: RAG Platform
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

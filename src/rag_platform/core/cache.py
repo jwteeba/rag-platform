@@ -28,6 +28,7 @@ from redis.exceptions import TimeoutError as RedisTimeoutError
 from redis.retry import Retry as SyncRetry
 
 from rag_platform.core.logging import get_logger
+from rag_platform.core.metrics import CACHE_HITS, CACHE_MISSES
 
 if TYPE_CHECKING:
     from rag_platform.core.config import Settings
@@ -95,6 +96,7 @@ def build_sync_redis_client(settings: Settings) -> SyncRedis:
 def log_cache_access(client: SyncRedis, *, layer: str, hit: bool, started_at: float) -> None:
     """Record one cache lookup without letting telemetry affect the request."""
     event = "cache_hit" if hit else "cache_miss"
+    (CACHE_HITS if hit else CACHE_MISSES).labels(cache_layer=layer).inc()
     try:
         client.incr(f"rag:cache:metrics:{layer}:{'hits' if hit else 'misses'}")
     except Exception:

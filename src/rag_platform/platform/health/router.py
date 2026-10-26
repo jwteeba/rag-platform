@@ -10,16 +10,26 @@ deprecation policy.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import asyncio
+import time
+from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import text
 
 from rag_platform.core.config import Settings, get_settings
 from rag_platform.core.logging import get_logger
-from rag_platform.platform.health.schemas import LivenessResponse, ReadinessResponse
+from rag_platform.identity_access.api.v1.dependencies import CurrentUser, require_permission
+from rag_platform.identity_access.domain.roles import Permission
+from rag_platform.platform.health.schemas import (
+    DetailedHealthResponse,
+    LivenessResponse,
+    ReadinessResponse,
+)
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from rag_platform.di.containers import Container
 
 logger = get_logger(__name__)
@@ -66,6 +76,63 @@ async def readiness(request: Request, response: Response) -> ReadinessResponse:
         status="ok" if all_ok else "degraded",
         version=settings.version,
         checks=checks,
+    )
+
+
+@router.get(
+    "/detailed",
+    response_model=DetailedHealthResponse,
+    dependencies=[Depends(require_permission(Permission.OBSERVABILITY_READ))],
+    summary="Detailed operator health diagnostics",
+)
+async def detailed_health(request: Request, _user: CurrentUser) -> DetailedHealthResponse:
+    """Provide latency/capacity detail without exposing it to anonymous probes."""
+    settings: Settings = request.app.state.settings
+    container: Container = request.app.state.container
+    checkers: dict[str, Callable[[], Awaitable[str]]] = {
+        "postgresql": lambda: _check_database(container),
+        "redis": lambda: _check_redis(container),
+        "minio": lambda: _check_storage(container, settings),
+        "qdrant": lambda: _check_vector_database(container),
+    }
+    dependencies: dict[str, dict[str, str | float | None]] = {}
+    for name, checker in checkers.items():
+        started_at = time.perf_counter()
+        check = await checker()
+        dependencies[name] = {
+            "status": "ok" if check == "ok" else "degraded",
+            "latency_ms": round((time.perf_counter() - started_at) * 1000, 3),
+            "error": None if check == "ok" else check,
+        }
+
+    pool: Any = container.engine.pool
+    cache_hit_rates: dict[str, float] = {}
+    for layer in ("embedding", "retrieval", "llm"):
+        hits = int(await container.redis_client.get(f"rag:cache:metrics:{layer}:hits") or 0)
+        misses = int(await container.redis_client.get(f"rag:cache:metrics:{layer}:misses") or 0)
+        cache_hit_rates[layer] = hits / (hits + misses) if hits + misses else 0.0
+
+    from rag_platform.core.celery import celery_app
+
+    try:
+        replies = await asyncio.to_thread(celery_app.control.inspect().ping)
+        workers = sorted((replies or {}).keys())
+    except Exception as exc:  # the health endpoint must remain diagnostic during broker failure
+        logger.warning("celery_inspect_ping_failed", error_type=type(exc).__name__)
+        workers = []
+
+    all_ok = all(item["status"] == "ok" for item in dependencies.values())
+    return DetailedHealthResponse(
+        status="ok" if all_ok else "degraded",
+        version=settings.version,
+        dependencies=dependencies,
+        database_pool={
+            "size": pool.size(),
+            "checked_out": pool.checkedout(),
+            "overflow": pool.overflow(),
+        },
+        cache_hit_rates=cache_hit_rates,
+        celery_workers=workers,
     )
 
 

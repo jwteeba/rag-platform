@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
+from rag_platform.core.metrics import EMBEDDING_LATENCY, RETRIEVAL_LATENCY
 from rag_platform.retrieval.domain.exceptions import InvalidQueryError, NoResultsFoundError
 
 if TYPE_CHECKING:
@@ -38,6 +40,7 @@ class RetrievalService:
         document_ids: list[uuid.UUID] | None = None,
         query_vector: list[float] | None = None,
     ) -> list[SearchResult]:
+        started_at = time.perf_counter()
         query = query.strip()
         if not query:
             raise InvalidQueryError("Query must not be empty.")
@@ -63,6 +66,7 @@ class RetrievalService:
         for result in results:
             result.score = scores.get(result.chunk_id, 0.0)
 
+        RETRIEVAL_LATENCY.observe(time.perf_counter() - started_at)
         return results
 
     def embed_query(self, query: str) -> list[float]:
@@ -70,5 +74,7 @@ class RetrievalService:
         query = query.strip()
         if not query:
             raise InvalidQueryError("Query must not be empty.")
+        started_at = time.perf_counter()
         vectors = self._embedding_port.embed([query])
+        EMBEDDING_LATENCY.observe(time.perf_counter() - started_at)
         return vectors[0]

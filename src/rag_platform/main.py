@@ -29,6 +29,8 @@ from rag_platform.core.middleware.error_handling import (
     validation_error_handler,
 )
 from rag_platform.core.middleware.request_id import RequestIDMiddleware
+from rag_platform.core.middleware.request_timing import RequestTimingMiddleware
+from rag_platform.core.telemetry import configure_tracing, instrument_sqlalchemy
 from rag_platform.di.containers import (
     build_container,
     ensure_bootstrap_admin,
@@ -58,6 +60,7 @@ def _build_lifespan(
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.container = build_container(settings)
         app.state.settings = settings
+        instrument_sqlalchemy(app.state.container.engine, settings)
         await ensure_storage_bucket(app.state.container, settings)
         await ensure_vector_collection(app.state.container, settings)
         await ensure_bootstrap_admin(app.state.container, settings)
@@ -81,6 +84,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """
     settings = settings or get_settings()
     configure_logging(settings)
+    configure_tracing(settings)
 
     app = FastAPI(
         title=settings.name,
@@ -94,12 +98,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Middleware order matters: Starlette applies them as nested layers, so
     # the LAST one added is the OUTERMOST — it sees the request first and
     # the response last. We want, from outermost to innermost:
-    #   1. Error handling  — must wrap everything so no exception below it
+    #   1. Request timing   — wraps error translation so every response,
+    #      including formatted failures, has completion duration logged.
+    #   2. Error handling  — must wrap everything else so no exception below it
     #      escapes as an unformatted 500.
-    #   2. Request ID       — every log line, including error logs, should
+    #   3. Request ID       — every log line, including error logs, should
     #      carry it.
-    #   3. Correlation ID   — same reasoning as request ID.
-    #   4. Trusted host / CORS — standard perimeter concerns.
+    #   4. Correlation ID   — same reasoning as request ID.
+    #   5. Trusted host / CORS — standard perimeter concerns.
     # Registered here in reverse (innermost-first) order accordingly.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
     if settings.cors_allowed_origins:
@@ -113,6 +119,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(CorrelationIDMiddleware)
     app.add_middleware(RequestIDMiddleware)
     app.add_middleware(ErrorHandlingMiddleware)
+    app.add_middleware(RequestTimingMiddleware)
 
     # `HTTPException`/`RequestValidationError` are intercepted by Starlette's
     # own exception middleware *before* they'd reach `ErrorHandlingMiddleware`
@@ -129,6 +136,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(retrieval_router, prefix=settings.api_v1_prefix)
     app.include_router(generation_router, prefix=settings.api_v1_prefix)
     app.include_router(conversation_router, prefix=settings.api_v1_prefix)
+
+    if settings.prometheus_enabled:
+        from prometheus_fastapi_instrumentator import Instrumentator
+
+        Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+
+    if settings.otel_enabled:
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+        FastAPIInstrumentor.instrument_app(app)
+        HTTPXClientInstrumentor().instrument()
 
     logger.info(
         "application_configured",
