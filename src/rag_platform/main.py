@@ -11,6 +11,14 @@ Uvicorn entry point: `rag_platform.main:app`.
 
 from __future__ import annotations
 
+import fastapi.routing
+
+# Injects the missing 'path' property to satisfy the old OpenTelemetry package
+# The attribute fastapi.routing._IncludedRouter is still missing in FastAPI 0.141.1
+# and opentelemetry-instrumentation-fastapi 0.52b1
+if not hasattr(fastapi.routing._IncludedRouter, "path"):
+    fastapi.routing._IncludedRouter.path = ""  # type: ignore[attr-defined]
+
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import TYPE_CHECKING
 

@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 
 async def _process(document_id: uuid.UUID) -> int:
     settings = get_settings()
-    engine = build_engine(settings)
+    engine = build_engine(settings, nullpool=True)
     instrument_sqlalchemy(engine, settings)
     session_factory = build_session_factory(engine)
     try:
@@ -74,7 +74,7 @@ async def _process(document_id: uuid.UUID) -> int:
 
 async def _mark_failed(document_id: uuid.UUID) -> None:
     settings = get_settings()
-    engine = build_engine(settings)
+    engine = build_engine(settings, nullpool=True)
     session_factory = build_session_factory(engine)
     try:
         async with session_factory() as session:

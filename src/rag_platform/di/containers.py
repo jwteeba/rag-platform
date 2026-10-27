@@ -142,10 +142,27 @@ async def ensure_storage_bucket(container: Container, settings: Settings) -> Non
     Idempotent — safe to call on every startup. Wraps the synchronous
     `ensure_bucket_exists` in `asyncio.to_thread` so the event loop is not
     blocked during startup.
+
+    In non-production environments, a connection failure is logged as a
+    warning rather than crashing startup — MinIO is only required for
+    document upload; auth, search, and generation work without it.
     """
     import asyncio
 
-    await asyncio.to_thread(ensure_bucket_exists, container.minio_client, settings.minio_bucket)
+    from rag_platform.core.logging import get_logger
+
+    logger = get_logger(__name__)
+    try:
+        await asyncio.to_thread(ensure_bucket_exists, container.minio_client, settings.minio_bucket)
+    except Exception as exc:
+        if settings.is_production:
+            raise
+        logger.warning(
+            "minio_unavailable_at_startup",
+            endpoint=settings.minio_endpoint,
+            error=str(exc),
+            hint="Document upload will fail until MinIO is reachable.",
+        )
 
 
 async def ensure_bootstrap_admin(container: Container, settings: Settings) -> None:

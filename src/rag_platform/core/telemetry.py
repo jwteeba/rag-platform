@@ -22,19 +22,35 @@ _sqlalchemy_instrumented_engines: set[int] = set()
 
 
 def configure_tracing(settings: Settings) -> None:
-    """Configure process-wide tracing once, using a swappable OTLP exporter."""
+    """Configure process-wide tracing once, using a swappable OTLP exporter.
+
+    No-op when `otel_enabled` is False. Connection failures to the collector
+    are non-fatal — the BatchSpanProcessor will retry in the background and
+    drop spans if the collector remains unreachable.
+    """
     global _configured
     if _configured or not settings.otel_enabled:
         return
-    provider = TracerProvider(
-        resource=Resource.create({"service.name": settings.otel_service_name})
-    )
-    provider.add_span_processor(
-        BatchSpanProcessor(OTLPSpanExporter(endpoint=settings.otel_endpoint))
-    )
-    trace.set_tracer_provider(provider)
-    RedisInstrumentor().instrument()
-    _configured = True
+    try:
+        provider = TracerProvider(
+            resource=Resource.create({"service.name": settings.otel_service_name})
+        )
+        provider.add_span_processor(
+            BatchSpanProcessor(OTLPSpanExporter(endpoint=settings.otel_endpoint))
+        )
+        trace.set_tracer_provider(provider)
+        RedisInstrumentor().instrument()
+        _configured = True
+    except Exception:
+        # Never crash startup over a missing collector.
+        from rag_platform.core.logging import get_logger
+
+        get_logger(__name__).warning(
+            "otel_setup_failed",
+            endpoint=settings.otel_endpoint,
+            hint="Traces will not be exported. Start the OTEL collector or "
+            "set APP_OTEL_ENABLED=false.",
+        )
 
 
 def instrument_sqlalchemy(engine: AsyncEngine, settings: Settings) -> None:

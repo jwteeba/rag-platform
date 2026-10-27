@@ -5,11 +5,13 @@
 # ---------------------------------------------------------------------------
 FROM python:3.12-slim AS builder
 
+
 ENV POETRY_VERSION=1.8.3 \
     POETRY_HOME=/opt/poetry \
     POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_IN_PROJECT=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app/src
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl build-essential tesseract-ocr \

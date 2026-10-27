@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import DateTime, MetaData, func
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
 from rag_platform.core.ids import generate_uuid7
 
@@ -73,18 +73,27 @@ class TimestampMixin:
     )
 
 
-def build_engine(settings: Settings) -> AsyncEngine:
+def build_engine(settings: Settings, *, nullpool: bool = False) -> AsyncEngine:
     """Create the async SQLAlchemy engine from application settings."""
+    pool_kwargs: dict[str, object] = (
+        {"poolclass": NullPool}
+        if nullpool
+        else {
+            "poolclass": AsyncAdaptedQueuePool,
+            "pool_size": settings.database_pool_size,
+            "max_overflow": settings.database_max_overflow,
+        }
+    )
     return create_async_engine(
         settings.database_url,
         echo=settings.database_echo,
-        poolclass=NullPool,
         pool_pre_ping=True,
         connect_args={
             "prepared_statement_cache_size": 0,
             "statement_cache_size": 0,
             "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
         },
+        **pool_kwargs,
     )
 
 

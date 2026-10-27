@@ -67,7 +67,7 @@ def _build_embedding_adapter(settings: object, cache_client: object) -> object:
 
 async def _embed(document_id: uuid.UUID) -> int:
     settings = get_settings()
-    engine = build_engine(settings)
+    engine = build_engine(settings, nullpool=True)
     instrument_sqlalchemy(engine, settings)
     session_factory = build_session_factory(engine)
     cache_client = build_sync_redis_client(settings)
@@ -132,7 +132,7 @@ async def _embed(document_id: uuid.UUID) -> int:
 
 async def _mark_chunks_failed(document_id: uuid.UUID) -> None:
     settings = get_settings()
-    engine = build_engine(settings)
+    engine = build_engine(settings, nullpool=True)
     session_factory = build_session_factory(engine)
     try:
         async with session_factory() as session:

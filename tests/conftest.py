@@ -32,6 +32,7 @@ from fastapi.testclient import TestClient
 from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
 
 from rag_platform.core.config import Environment, LogFormat, Settings
 from rag_platform.core.db import Base
@@ -114,7 +115,7 @@ async def clean_database() -> AsyncIterator[None]:
     pytest-asyncio's per-test event loop, at a small, acceptable per-test
     cost.
     """
-    engine = create_async_engine(TEST_DATABASE_URL)
+    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
     async with engine.begin() as connection:
         await connection.execute(text("CREATE SCHEMA IF NOT EXISTS rag_platform"))
         await connection.run_sync(Base.metadata.create_all)
