@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
+from rag_platform.core.guardrails import sanitize_filename
 from rag_platform.core.logging import get_logger
 from rag_platform.core.metrics import DOCUMENTS_UPLOADED
 from rag_platform.document_management.domain.entities import Document
@@ -64,6 +65,7 @@ class DocumentService:
         if data.content_type not in self._allowed_types:
             raise UnsupportedContentTypeError()
 
+        safe_filename = sanitize_filename(data.filename)
         content_hash = hashlib.sha256(data.data).hexdigest()
 
         # Fast path: avoid creating a new document or uploading to MinIO
@@ -78,7 +80,7 @@ class DocumentService:
 
         document = Document.create(
             owner_id=data.owner_id,
-            filename=data.filename,
+            filename=safe_filename,
             content_type=data.content_type,
             size_bytes=len(data.data),
             content_hash=content_hash,

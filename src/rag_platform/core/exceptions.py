@@ -5,11 +5,6 @@ subclass `ApplicationError` rather than a bare `Exception`, so the error
 handling middleware (`core/middleware/error_handling.py`) can map it to a
 consistent RFC 7807 problem+json response without each route needing its own
 try/except block.
-
-Future phases add more specific subclasses as their domains need them (e.g.
-`DocumentNotFoundError` in Phase 3, `InvalidCredentialsError` in Phase 2).
-Only the base hierarchy needed by Phase 1 (generic + not-found + validation)
-is defined here.
 """
 
 from __future__ import annotations
@@ -81,3 +76,15 @@ class AuthorizationError(ApplicationError):
 
     message = "You do not have permission to perform this action."
     error_type = "authorization-error"
+
+
+class GuardrailViolationError(ApplicationError):
+    """Raised when input or output fails a guardrail check.
+
+    Covers prompt-injection attempts, policy-violating content, and any
+    other content the guardrail layer rejects before it reaches the LLM or
+    is returned to the client.
+    """
+
+    message = "The request was rejected by a content guardrail."
+    error_type = "guardrail-violation"

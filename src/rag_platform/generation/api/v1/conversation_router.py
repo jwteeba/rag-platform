@@ -7,7 +7,7 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +23,8 @@ from rag_platform.generation.infrastructure.repositories.postgres_conversation_r
     PostgresConversationRepository,
     PostgresMessageRepository,
 )
-from rag_platform.identity_access.api.v1.dependencies import CurrentUser
+from rag_platform.identity_access.api.v1.dependencies import CurrentUser, require_permission
+from rag_platform.identity_access.domain.roles import Permission
 from rag_platform.platform.database.dependencies import get_db_session
 
 router = APIRouter(tags=["conversations"])
@@ -42,11 +43,17 @@ def _message(m: Message) -> dict[str, object]:
     }
 
 
-@router.post("/conversations", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/conversations",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission(Permission.CONVERSATIONS_MANAGE))],
+)
 async def start_conversation(
-    body: ConversationStartRequest, user: CurrentUser, service: ServiceDep
+    body: ConversationStartRequest, user: CurrentUser, service: ServiceDep, request: Request
 ) -> dict[str, object]:
-    conversation, result = await service.start(body.query.strip(), limit=body.limit)
+    conversation, result = await service.start(
+        body.query.strip(), limit=body.limit, path=request.url.path
+    )
     return {
         "conversation_id": conversation.id,
         "answer": result.answer,
@@ -57,15 +64,19 @@ async def start_conversation(
     }
 
 
-@router.post("/conversations/{conversation_id}/messages")
+@router.post(
+    "/conversations/{conversation_id}/messages",
+    dependencies=[Depends(require_permission(Permission.CONVERSATIONS_MANAGE))],
+)
 async def continue_conversation(
     conversation_id: uuid.UUID,
     body: ConversationMessageRequest,
     user: CurrentUser,
     service: ServiceDep,
+    request: Request,
 ) -> dict[str, object]:
     result = await service.continue_conversation(
-        conversation_id, body.query.strip(), limit=body.limit
+        conversation_id, body.query.strip(), limit=body.limit, path=request.url.path
     )
     return {
         "conversation_id": conversation_id,
@@ -77,15 +88,21 @@ async def continue_conversation(
     }
 
 
-@router.post("/conversations/{conversation_id}/messages/stream")
+@router.post(
+    "/conversations/{conversation_id}/messages/stream",
+    dependencies=[Depends(require_permission(Permission.CONVERSATIONS_MANAGE))],
+)
 async def stream_message(
     conversation_id: uuid.UUID,
     body: ConversationMessageRequest,
     user: CurrentUser,
     service: ServiceDep,
+    request: Request,
 ) -> StreamingResponse:
     async def events() -> AsyncIterator[str]:
-        async for chunk in service.stream(conversation_id, body.query.strip(), limit=body.limit):
+        async for chunk in service.stream(
+            conversation_id, body.query.strip(), limit=body.limit, path=request.url.path
+        ):
             yield f"data: {json.dumps({'text': chunk})}\n\n"
         yield "data: [DONE]\n\n"
 
@@ -94,7 +111,9 @@ async def stream_message(
     )
 
 
-@router.get("/conversations")
+@router.get(
+    "/conversations", dependencies=[Depends(require_permission(Permission.CONVERSATIONS_READ))]
+)
 async def list_conversations(
     user: CurrentUser,
     session: SessionDep,
@@ -111,7 +130,10 @@ async def list_conversations(
     }
 
 
-@router.get("/conversations/{conversation_id}")
+@router.get(
+    "/conversations/{conversation_id}",
+    dependencies=[Depends(require_permission(Permission.CONVERSATIONS_READ))],
+)
 async def get_conversation(
     conversation_id: uuid.UUID, user: CurrentUser, session: SessionDep
 ) -> dict[str, object]:
@@ -122,7 +144,10 @@ async def get_conversation(
     return {"conversation": conversation, "messages": [_message(m) for m in messages]}
 
 
-@router.get("/conversations/{conversation_id}/messages")
+@router.get(
+    "/conversations/{conversation_id}/messages",
+    dependencies=[Depends(require_permission(Permission.CONVERSATIONS_READ))],
+)
 async def list_messages(
     conversation_id: uuid.UUID,
     user: CurrentUser,
@@ -142,7 +167,11 @@ async def list_messages(
     }
 
 
-@router.delete("/conversations/{conversation_id}", status_code=204)
+@router.delete(
+    "/conversations/{conversation_id}",
+    status_code=204,
+    dependencies=[Depends(require_permission(Permission.CONVERSATIONS_MANAGE))],
+)
 async def delete_conversation(
     conversation_id: uuid.UUID, user: CurrentUser, session: SessionDep
 ) -> None:

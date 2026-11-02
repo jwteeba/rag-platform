@@ -6,6 +6,7 @@ import hashlib
 import time
 from typing import TYPE_CHECKING
 
+from rag_platform.core.guardrails import check_prompt_injection, sanitize_output, sanitize_query
 from rag_platform.core.logging import get_logger
 from rag_platform.core.metrics import LLM_LATENCY, LLM_TOKENS_USED
 from rag_platform.generation.domain.entities import Conversation, GenerationResult, Message
@@ -64,15 +65,21 @@ class GenerationService:
         self.cache_similarity_threshold = cache_similarity_threshold
         self.provider = provider
 
-    async def start(self, query: str, *, limit: int = 5) -> tuple[Conversation, GenerationResult]:
-        conversation = Conversation.create(self.owner_id, query.strip()[:200])
+    async def start(
+        self, query: str, *, limit: int = 5, path: str = "unknown"
+    ) -> tuple[Conversation, GenerationResult]:
+        query = sanitize_query(query)
+        check_prompt_injection(query, path=path, user_id=str(self.owner_id))
+        conversation = Conversation.create(self.owner_id, query[:200])
         await self.conversations.add(conversation)
         result = await self._generate(conversation, query, limit=limit, history=[])
         return conversation, result
 
     async def continue_conversation(
-        self, conversation_id: uuid.UUID, query: str, *, limit: int = 5
+        self, conversation_id: uuid.UUID, query: str, *, limit: int = 5, path: str = "unknown"
     ) -> GenerationResult:
+        query = sanitize_query(query)
+        check_prompt_injection(query, path=path, user_id=str(self.owner_id))
         conversation = await self.conversations.get(conversation_id, self.owner_id)
         if conversation is None:
             raise ConversationNotFoundError()
@@ -82,7 +89,7 @@ class GenerationService:
     async def _generate(
         self, conversation: Conversation, query: str, *, limit: int, history: list[Message]
     ) -> GenerationResult:
-        query_vector = self.retrieval.embed_query(query)
+        query_vector = self.retrieval.embed_query(query, user_id=str(self.owner_id))
         namespace = self._turn_cache_namespace(history, limit)
         cached = await self._lookup_cached(query_vector, namespace)
         if cached is not None:
@@ -118,7 +125,7 @@ class GenerationService:
             {"filename": fn, "chunk_index": idx} for fn, idx, _ in prompt.context_chunks
         ]
         result = GenerationResult(
-            answer,
+            sanitize_output(answer),
             sources,
             used_prompt or prompt_tokens,
             completion,
@@ -139,13 +146,15 @@ class GenerationService:
         return result
 
     async def stream(
-        self, conversation_id: uuid.UUID, query: str, *, limit: int = 5
+        self, conversation_id: uuid.UUID, query: str, *, limit: int = 5, path: str = "unknown"
     ) -> AsyncIterator[str]:
         conversation = await self.conversations.get(conversation_id, self.owner_id)
         if conversation is None:
             raise ConversationNotFoundError()
+        query = sanitize_query(query)
+        check_prompt_injection(query, path=path, user_id=str(self.owner_id))
         history = await self.messages.list_recent(conversation_id, self.history_limit)
-        query_vector = self.retrieval.embed_query(query)
+        query_vector = self.retrieval.embed_query(query, user_id=str(self.owner_id))
         namespace = self._turn_cache_namespace(history, limit)
         cached = await self._lookup_cached(query_vector, namespace)
         if cached is not None:

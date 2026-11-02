@@ -2,13 +2,127 @@
   "annotations": {"list": []},
   "editable": true,
   "panels": [
-    {"type":"timeseries","title":"Request rate","targets":[{"expr":"sum(rate(http_requests_total[5m]))"}]},
-    {"type":"timeseries","title":"Error rate","targets":[{"expr":"sum(rate(http_requests_total{status=~\"5..\"}[5m]))"}]},
-    {"type":"timeseries","title":"HTTP p50 / p95 / p99 latency","targets":[{"expr":"histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))"},{"expr":"histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))"},{"expr":"histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))"}]},
-    {"type":"timeseries","title":"LLM token burn rate","targets":[{"expr":"sum(rate(rag_llm_tokens_used_total[5m])) by (model, provider)"}]},
-    {"type":"timeseries","title":"Cache hit rate","targets":[{"expr":"sum(rate(rag_cache_hits_total[5m])) by (cache_layer) / (sum(rate(rag_cache_hits_total[5m])) by (cache_layer) + sum(rate(rag_cache_misses_total[5m])) by (cache_layer))"}]}
+    {
+      "type": "timeseries",
+      "title": "Request rate",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [{"expr": "sum(rate(http_requests_total[5m])) by (handler, method)", "legendFormat": "{{method}} {{handler}}"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Error rate",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [{"expr": "sum(rate(http_requests_total{status_code=~\"5..\"}[5m])) by (handler)", "legendFormat": "{{handler}}"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP p50 / p95 / p99 latency",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50"},
+        {"expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95"},
+        {"expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p99"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Retrieval latency (p50 / p95 / p99)",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.50, sum(rate(rag_retrieval_latency_seconds_bucket[5m])) by (le))", "legendFormat": "p50"},
+        {"expr": "histogram_quantile(0.95, sum(rate(rag_retrieval_latency_seconds_bucket[5m])) by (le))", "legendFormat": "p95"},
+        {"expr": "histogram_quantile(0.99, sum(rate(rag_retrieval_latency_seconds_bucket[5m])) by (le))", "legendFormat": "p99"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Embedding latency (p50 / p95 / p99)",
+      "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.50, sum(rate(rag_embedding_latency_seconds_bucket[5m])) by (le))", "legendFormat": "p50"},
+        {"expr": "histogram_quantile(0.95, sum(rate(rag_embedding_latency_seconds_bucket[5m])) by (le))", "legendFormat": "p95"},
+        {"expr": "histogram_quantile(0.99, sum(rate(rag_embedding_latency_seconds_bucket[5m])) by (le))", "legendFormat": "p99"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM latency (p50 / p95 / p99)",
+      "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.50, sum(rate(rag_llm_latency_seconds_bucket[5m])) by (le, model))", "legendFormat": "p50 {{model}}"},
+        {"expr": "histogram_quantile(0.95, sum(rate(rag_llm_latency_seconds_bucket[5m])) by (le, model))", "legendFormat": "p95 {{model}}"},
+        {"expr": "histogram_quantile(0.99, sum(rate(rag_llm_latency_seconds_bucket[5m])) by (le, model))", "legendFormat": "p99 {{model}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM token burn rate",
+      "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+      "targets": [{"expr": "sum(rate(rag_llm_tokens_used_total[5m])) by (model, provider)", "legendFormat": "{{model}} / {{provider}}"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Cache hit rate",
+      "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+      "targets": [{
+        "expr": "sum(rate(rag_cache_hits_total[5m])) by (cache_layer) / (sum(rate(rag_cache_hits_total[5m])) by (cache_layer) + sum(rate(rag_cache_misses_total[5m])) by (cache_layer) > 0)",
+        "legendFormat": "{{cache_layer}}"
+      }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Documents uploaded rate",
+      "gridPos": {"x": 0, "y": 32, "w": 12, "h": 8},
+      "targets": [{"expr": "sum(rate(rag_documents_uploaded_total[5m])) by (content_type)", "legendFormat": "{{content_type}}"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Chunks indexed rate",
+      "gridPos": {"x": 12, "y": 32, "w": 12, "h": 8},
+      "targets": [{"expr": "sum(rate(rag_chunks_indexed_total[5m]))", "legendFormat": "chunks/s"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Guardrail rejections",
+      "description": "Rate of requests blocked by input/output guardrails, broken down by rule and endpoint path.",
+      "gridPos": {"x": 0, "y": 40, "w": 24, "h": 8},
+      "targets": [{"expr": "sum(rate(rag_guardrail_rejections_total[5m])) by (rule, path)", "legendFormat": "{{rule}} @ {{path}}"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Auth events",
+      "description": "Login, registration, logout, and token refresh rates.",
+      "gridPos": {"x": 0, "y": 48, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "sum(rate(rag_user_logins_total[5m]))", "legendFormat": "logins"},
+        {"expr": "sum(rate(rag_user_registrations_total[5m]))", "legendFormat": "registrations"},
+        {"expr": "sum(rate(rag_user_logouts_total[5m]))", "legendFormat": "logouts"},
+        {"expr": "sum(rate(rag_token_refreshes_total[5m]))", "legendFormat": "token refreshes"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Login failures by reason",
+      "description": "Failed logins broken down by reason: invalid credentials vs inactive account.",
+      "gridPos": {"x": 12, "y": 48, "w": 12, "h": 8},
+      "targets": [{"expr": "sum(rate(rag_user_login_failures_total[5m])) by (reason)", "legendFormat": "{{reason}}"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Token reuse attempts",
+      "description": "Refresh token reuse — possible session hijack or double-submit.",
+      "gridPos": {"x": 0, "y": 56, "w": 12, "h": 8},
+      "targets": [{"expr": "sum(rate(rag_token_reuse_attempts_total[5m]))", "legendFormat": "reuse attempts/s"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Guardrail rejections per user",
+      "description": "Per-user guardrail rejection rate — identify users triggering injection attempts.",
+      "gridPos": {"x": 12, "y": 56, "w": 12, "h": 8},
+      "targets": [{"expr": "sum(rate(rag_user_guardrail_rejections_total[5m])) by (user_id, rule)", "legendFormat": "{{user_id}} / {{rule}}"}]
+    }
   ],
   "schemaVersion": 39,
   "title": "RAG Platform Overview",
-  "version": 1
+  "version": 2
 }

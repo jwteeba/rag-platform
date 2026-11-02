@@ -10,6 +10,14 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
+from rag_platform.core.metrics import (
+    TOKEN_REFRESHES,
+    TOKEN_REUSE_ATTEMPTS,
+    USER_LOGIN_FAILURES,
+    USER_LOGINS,
+    USER_LOGOUTS,
+    USER_REGISTRATIONS,
+)
 from rag_platform.core.security import TokenType
 from rag_platform.identity_access.domain.entities import User
 from rag_platform.identity_access.domain.exceptions import (
@@ -65,6 +73,7 @@ class AuthenticationService:
             role=role,
         )
         await self._users.add(user)
+        USER_REGISTRATIONS.inc()
         return user
 
     async def authenticate(self, data: LoginInput) -> User:
@@ -76,9 +85,12 @@ class AuthenticationService:
         """
         user = await self._users.get_by_email(data.email)
         if user is None or not self._hasher.verify(data.password, user.hashed_password):
+            USER_LOGIN_FAILURES.labels(reason="invalid_credentials").inc()
             raise InvalidCredentialsError()
         if not user.is_active:
+            USER_LOGIN_FAILURES.labels(reason="inactive_account").inc()
             raise InactiveUserError()
+        USER_LOGINS.inc()
         return user
 
     async def issue_tokens(self, user: User) -> TokenPair:
@@ -112,6 +124,7 @@ class AuthenticationService:
         if issued is None:
             raise InvalidTokenError("Token is unknown to this server.")
         if issued.revoked:
+            TOKEN_REUSE_ATTEMPTS.inc()
             raise TokenRevokedError()
 
         user = await self._users.get_by_id(_parse_user_id(claims.subject))
@@ -121,6 +134,7 @@ class AuthenticationService:
             raise InactiveUserError()
 
         await self._refresh_tokens.revoke(claims.jti)
+        TOKEN_REFRESHES.inc()
         return await self.issue_tokens(user)
 
     async def logout(self, refresh_token: str) -> None:
@@ -135,6 +149,7 @@ class AuthenticationService:
         except InvalidTokenError:
             return
         await self._refresh_tokens.revoke(claims.jti)
+        USER_LOGOUTS.inc()
 
     async def get_current_user(self, access_token: str) -> User:
         """Resolve the caller identified by a bearer access token.

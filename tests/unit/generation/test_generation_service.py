@@ -58,7 +58,9 @@ class FakeMessages:
 
 
 class FakeRetrieval:
-    def embed_query(self, query: str) -> list[float]:
+    def embed_query(
+        self, query: str, *, path: str = "unknown", user_id: str = "anonymous"
+    ) -> list[float]:
         return [1.0, 0.0]
 
     async def search(self, query: str, owner_id: uuid.UUID, *, limit: int, query_vector=None):

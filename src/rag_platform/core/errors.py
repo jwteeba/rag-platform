@@ -18,6 +18,7 @@ from rag_platform.core.exceptions import (
     AuthenticationError,
     AuthorizationError,
     ConflictError,
+    GuardrailViolationError,
     NotFoundError,
     ValidationError,
 )
@@ -30,6 +31,7 @@ _ERROR_STATUS_MAP: dict[type[ApplicationError], HTTPStatus] = {
     ConflictError: HTTPStatus.CONFLICT,
     AuthenticationError: HTTPStatus.UNAUTHORIZED,
     AuthorizationError: HTTPStatus.FORBIDDEN,
+    GuardrailViolationError: HTTPStatus.BAD_REQUEST,
 }
 
 

@@ -103,7 +103,10 @@ To reach the admin-only endpoints on a fresh instance, set
 starting — see the comment in `.env.example`. Self-registration always
 assigns the MEMBER role.
 
-## Running with Docker Compose
+## Running in production
+
+The recommended production path is Docker Compose — it starts the API and
+Celery worker together with correct startup ordering and healthchecks:
 
 ```bash
 make docker-up
@@ -120,6 +123,25 @@ After startup, open [Jaeger](http://localhost:16686) to explore distributed trac
 [Grafana](http://localhost:3000) (default `admin` / `admin`) for the automatically
 provisioned **RAG Platform Overview** dashboard. Prometheus is available at
 [localhost:9090](http://localhost:9090); it scrapes the API's `/metrics` endpoint.
+
+To run without Docker on a Linux server, start the API and worker as two
+separate processes (use a process manager such as `systemd` or `supervisord`
+to keep both alive):
+
+```bash
+# Ensure all APP_* env vars are set (e.g. export $(cat .env | xargs))
+# Apply migrations once before first start
+make db-upgrade
+
+# Process 1 — API (prefork is fine on Linux; use --workers to match CPU count)
+poetry run uvicorn rag_platform.main:app --host 0.0.0.0 --port 8000 --workers 4
+
+# Process 2 — Celery worker (drop --pool=solo used in make worker for macOS)
+poetry run celery -A rag_platform.worker.celery worker --loglevel=INFO
+```
+
+Both processes must be able to reach Postgres, Redis, MinIO, and Qdrant at
+the URLs configured in your environment before starting.
 
 ## Database migrations
 

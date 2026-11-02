@@ -21,7 +21,8 @@ from rag_platform.document_management.api.v1.schemas import (
 )
 from rag_platform.document_management.application.dto.document_dto import UploadDocumentInput
 from rag_platform.document_management.application.services.document_service import DocumentService
-from rag_platform.identity_access.api.v1.dependencies import CurrentUser
+from rag_platform.identity_access.api.v1.dependencies import CurrentUser, require_permission
+from rag_platform.identity_access.domain.roles import Permission
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -33,6 +34,7 @@ DocumentServiceDep = Annotated[DocumentService, Depends(get_document_service)]
     response_model=DocumentResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Upload a document",
+    dependencies=[Depends(require_permission(Permission.DOCUMENTS_MANAGE))],
 )
 async def upload_document(
     file: UploadFile,
@@ -55,6 +57,7 @@ async def upload_document(
     "",
     response_model=DocumentListResponse,
     summary="List documents owned by the current user",
+    dependencies=[Depends(require_permission(Permission.DOCUMENTS_READ))],
 )
 async def list_documents(
     current_user: CurrentUser,
@@ -88,6 +91,7 @@ async def list_documents(
     "/{document_id}",
     response_model=DocumentResponse,
     summary="Get document metadata",
+    dependencies=[Depends(require_permission(Permission.DOCUMENTS_READ))],
 )
 async def get_document(
     document_id: uuid.UUID,
@@ -103,6 +107,7 @@ async def get_document(
     summary="Download a document (307 redirect to presigned URL)",
     status_code=status.HTTP_307_TEMPORARY_REDIRECT,
     response_class=RedirectResponse,
+    dependencies=[Depends(require_permission(Permission.DOCUMENTS_READ))],
 )
 async def download_document(
     document_id: uuid.UUID,
@@ -117,6 +122,7 @@ async def download_document(
     "/{document_id}/download-url",
     response_model=DownloadUrlResponse,
     summary="Get a presigned download URL (JSON)",
+    dependencies=[Depends(require_permission(Permission.DOCUMENTS_READ))],
 )
 async def get_download_url(
     document_id: uuid.UUID,
@@ -132,6 +138,7 @@ async def get_download_url(
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
     summary="Delete a document",
+    dependencies=[Depends(require_permission(Permission.DOCUMENTS_MANAGE))],
 )
 async def delete_document(
     document_id: uuid.UUID,

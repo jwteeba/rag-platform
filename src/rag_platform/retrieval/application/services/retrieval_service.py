@@ -1,10 +1,11 @@
-"""RetrievalService: embed query → vector search → hydrate → return ranked results."""
+"""RetrievalService: embed query --> vector search --> hydrate --> return ranked results."""
 
 from __future__ import annotations
 
 import time
 from typing import TYPE_CHECKING
 
+from rag_platform.core.guardrails import check_prompt_injection, sanitize_query
 from rag_platform.core.metrics import EMBEDDING_LATENCY, RETRIEVAL_LATENCY
 from rag_platform.retrieval.domain.exceptions import InvalidQueryError, NoResultsFoundError
 
@@ -39,11 +40,13 @@ class RetrievalService:
         limit: int,
         document_ids: list[uuid.UUID] | None = None,
         query_vector: list[float] | None = None,
+        path: str = "unknown",
     ) -> list[SearchResult]:
         started_at = time.perf_counter()
-        query = query.strip()
+        query = sanitize_query(query)
         if not query:
             raise InvalidQueryError("Query must not be empty.")
+        check_prompt_injection(query, path=path, user_id=str(owner_id))
 
         limit = min(limit, self._limit_max)
 
@@ -69,11 +72,14 @@ class RetrievalService:
         RETRIEVAL_LATENCY.observe(time.perf_counter() - started_at)
         return results
 
-    def embed_query(self, query: str) -> list[float]:
+    def embed_query(
+        self, query: str, *, path: str = "unknown", user_id: str = "anonymous"
+    ) -> list[float]:
         """Embed a query through the configured (optionally cached) provider."""
-        query = query.strip()
+        query = sanitize_query(query)
         if not query:
             raise InvalidQueryError("Query must not be empty.")
+        check_prompt_injection(query, path=path, user_id=user_id)
         started_at = time.perf_counter()
         vectors = self._embedding_port.embed([query])
         EMBEDDING_LATENCY.observe(time.perf_counter() - started_at)

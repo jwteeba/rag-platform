@@ -120,7 +120,7 @@ services:
     environment:
       APP_ENVIRONMENT: development
       APP_LOG_FORMAT: console
-      APP_DATABASE_URL: ${APP_DATABASE_URL:-postgresql+asyncpg://postgres:postgres@localhost:5433/rag_platform}
+      APP_DATABASE_URL: ${APP_DATABASE_URL:-postgresql+asyncpg://postgres:postgres@postgres:5432/rag_platform}
       APP_REDIS_HOST: ${APP_REDIS_HOST:-redis://redis:6379/0}
       APP_MINIO_ENDPOINT: minio:9000
       APP_MINIO_ACCESS_KEY: minioadmin
