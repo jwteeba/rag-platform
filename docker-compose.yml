@@ -56,12 +56,12 @@ services:
       - "6333:6333"
     volumes:
       - qdrant-data:/qdrant/storage
-    # healthcheck:
-    #   test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
-    #   interval: 5s
-    #   timeout: 5s
-    #   retries: 10
-    #   start_period: 5s
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/6333 && echo -e \"GET /healthz HTTP/1.0\\r\\n\\r\\n\" >&3 && grep -q 200 <&3'"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.159.0
@@ -142,7 +142,7 @@ services:
       minio:
         condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
       interval: 30s
@@ -161,13 +161,15 @@ services:
       PYTHONPATH: /app/src
       APP_ENVIRONMENT: development
       APP_LOG_FORMAT: console
-      APP_REDIS_HOST: redis://redis:6379/0
-      APP_MINIO_ENDPOINT: minio:9000
-      APP_MINIO_ACCESS_KEY: minioadmin
-      APP_MINIO_SECRET_KEY: minioadmin
-      APP_MINIO_SECURE: "false"
-      APP_QDRANT_HOST: qdrant
-      APP_QDRANT_PORT: "6333"
+      APP_REDIS_HOST: ${APP_REDIS_HOST:-redis://redis:6379/0}
+      APP_MINIO_ENDPOINT: ${APP_MINIO_ENDPOINT:-minio:9000}
+      APP_MINIO_ACCESS_KEY: ${APP_MINIO_ACCESS_KEY:-minioadmin}
+      APP_MINIO_SECRET_KEY: ${APP_MINIO_SECRET_KEY:-minioadmin}
+      APP_MINIO_SECURE: ${APP_MINIO_SECURE:-false}
+      APP_QDRANT_HOST: ${APP_QDRANT_HOST:-qdrant}
+      APP_QDRANT_PORT: ${APP_QDRANT_PORT:-6333}
+      APP_QDRANT_HTTPS: ${APP_QDRANT_HTTPS:-false}
+      APP_QDRANT_API_KEY: ${APP_QDRANT_API_KEY:-}
       APP_OTEL_ENDPOINT: http://otel-collector:4318/v1/traces
     volumes:
       - ./src:/app/src
@@ -189,7 +191,7 @@ services:
     env_file:
       - .env
     environment:
-      APP_REDIS_HOST: redis://redis:6379/0
+      APP_REDIS_HOST: ${APP_REDIS_HOST:-redis://redis:6379/0}
     volumes:
       - ./src:/app/src
     depends_on:
