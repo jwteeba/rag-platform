@@ -1,7 +1,11 @@
-.PHONY: install run dev worker test lint format typecheck check pre-commit-install docker-build docker-up docker-down clean db-upgrade db-downgrade db-revision db-current test-db-up test-db-create test-db-migrate test-redis-up test-minio-up test-qdrant-up
+.PHONY: install jailbreak-models run dev worker test lint format typecheck check pre-commit-install docker-build docker-up docker-down clean db-upgrade db-downgrade db-revision db-current test-db-up test-db-create test-db-migrate test-redis-up test-minio-up test-qdrant-up
 
 install:
 	poetry install
+
+# Download the local models used by Guardrails AI's DetectJailbreak validator.
+jailbreak-models:
+	poetry run python -m rag_platform.core.jailbreak_models
 
 # Run the API directly on the host (requires `make install` first, and
 # Postgres reachable per APP_DATABASE_URL — see `make db-upgrade`).

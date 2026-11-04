@@ -131,6 +131,7 @@ services:
       APP_QDRANT_HTTPS: ${APP_QDRANT_HTTPS:-false}
       APP_QDRANT_API_KEY: ${APP_QDRANT_API_KEY:-}
       APP_OTEL_ENDPOINT: http://otel-collector:4318/v1/traces
+      APP_OTEL_ENABLED: ${APP_OTEL_ENABLED:-false}
     volumes:
       - ./src:/app/src
       - ./alembic:/app/alembic
@@ -171,6 +172,7 @@ services:
       APP_QDRANT_HTTPS: ${APP_QDRANT_HTTPS:-false}
       APP_QDRANT_API_KEY: ${APP_QDRANT_API_KEY:-}
       APP_OTEL_ENDPOINT: http://otel-collector:4318/v1/traces
+      APP_OTEL_ENABLED: ${APP_OTEL_ENABLED:-false}
     volumes:
       - ./src:/app/src
     depends_on:

@@ -101,6 +101,15 @@ jobs:
       - name: Install dependencies
         run: poetry install --no-interaction
 
+      - name: Cache DetectJailbreak models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: jailbreak-models-v1-${{ runner.os }}-${{ hashFiles('poetry.lock', 'src/rag_platform/core/jailbreak_models.py') }}
+
+      - name: Download DetectJailbreak models
+        run: make jailbreak-models
+
       # GH Actions `services:` can't override the entrypoint/command, so
       # MinIO is started manually. The container is named `minio` and
       # health-checked from the runner side before pytest runs.

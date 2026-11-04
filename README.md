@@ -251,6 +251,27 @@ validation — is normalized to RFC 7807 `application/problem+json`. Try:
 curl -i http://localhost:8000/api/v1/users/me   # no token → 401
 ```
 
+## Guardrails
+
+Every user-supplied query is normalized and passed through the Guardrails AI validation
+pipeline before it is embedded or sent to the LLM. The pipeline uses local validators and
+does not call a hosted service. Query, filename, and output sanitization are separate
+object-oriented policies in `src/rag_platform/core/guardrails.py`.
+
+Add a prompt rule by registering another `Validator` and adding a `GuardrailCheck` to
+`PROMPT_INJECTION_PIPELINE`. Deterministic checks cover instruction overrides, delimiter
+smuggling, prompt disclosure requests, and encoded control sequences. Jailbreak detection
+uses Guardrails AI's local `DetectJailbreak` model, initialized only when needed. Its
+model weights are downloaded during the Docker build; for a local install, run
+`make jailbreak-models` once. A blocked query raises `GuardrailViolationError`, mapped to a
+`400` RFC 7807 response.
+Rejections increment `rag_guardrail_rejections_total` and
+`rag_user_guardrail_rejections_total` with the validator name as the rule label.
+
+The pattern checks do not understand paraphrases, and the jailbreak classifier can have
+false positives or negatives. Both are defense-in-depth checks and do not replace
+authorization and access controls.
+
 ## Project layout
 
 See `docs/architecture.md` for the full rationale.

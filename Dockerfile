@@ -1,8 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
-# ---------------------------------------------------------------------------
 # Stage 1: builder — install dependencies into a virtualenv with Poetry
-# ---------------------------------------------------------------------------
+
 FROM python:3.12-slim AS builder
 
 
@@ -11,6 +10,7 @@ ENV POETRY_VERSION=1.8.3 \
     POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_IN_PROJECT=1 \
     PIP_NO_CACHE_DIR=1 \
+    HF_HOME=/opt/huggingface \
     PYTHONPATH=/app/src
 
 RUN apt-get update \
@@ -27,10 +27,11 @@ RUN poetry install --only main --no-root --no-ansi
 
 COPY src ./src
 RUN poetry install --only main --no-ansi
+RUN poetry run python -m rag_platform.core.jailbreak_models
 
-# ---------------------------------------------------------------------------
+
 # Stage 2: runtime — copy only the built virtualenv and source
-# ---------------------------------------------------------------------------
+
 FROM python:3.12-slim AS runtime
 
 RUN groupadd --gid 1000 appuser \
@@ -40,8 +41,10 @@ WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
+COPY --from=builder --chown=appuser:appuser /opt/huggingface /opt/huggingface
 
 ENV PATH="/app/.venv/bin:${PATH}" \
+    HF_HOME=/opt/huggingface \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
