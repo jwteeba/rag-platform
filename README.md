@@ -8,16 +8,11 @@ API Documentation:
 
 ![API Docs](images/rag_api_doc.png)
 
-**Current phase: Phase 13: Observability + Monitoring.** Phase 13 adds OpenTelemetry
+**Current Update: Observability + Monitoring.** Added OpenTelemetry
 traces, Prometheus metrics, a provisioned Grafana dashboard, detailed admin health,
-and portable structured-alert fields. Phase 12
-establishes the crucial bridge between retrieval (Phase 9) and generation
-(Phase 11). It takes the top-ranked text chunks from the retrieval engine,
-filters and fits them within a strict model token budget, applies source
-attribution, renders dynamic prompt templates, and pre-calculates accurate
-token counts using tiktoken.
-It adds multi-layer Redis caching for embeddings, retrieval, and semantically
-similar LLM responses. See `docs/architecture.md` §Phases for the current phase status.
+and portable structured-alert fields. Implemented Guardrails & Security: Input/output sanitization, 
+prompt injection defenses, and metadata-level access controls.
+See `docs/architecture.md` §Phases for the current phase status.
 
 ## Requirements
 
